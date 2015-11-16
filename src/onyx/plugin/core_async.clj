@@ -34,10 +34,10 @@
     (throw (ex-info ":core.async/chan not found - add it using a :before-task-start lifecycle"
                     {:event-map-keys (keys event)})))
 
-  (let [task (:onyx.core/task-map event)]
-    (when (and (not= (:onyx/max-peers task) 1)
-               (not (:core.async/allow-unsafe-concurrency? lifecycle)))
-      (throw (ex-info ":onyx/max-peers must be set to 1 in the task map for core.async writers" {:task-map task}))))
+  ; (let [task (:onyx.core/task-map event)]
+  ;   (when (and (not= (:onyx/max-peers task) 1)
+  ;              (not (:core.async/allow-unsafe-concurrency? lifecycle)))
+  ;     (throw (ex-info ":onyx/max-peers must be set to 1 in the task map for core.async writers" {:task-map task}))))
 
   {})
 
