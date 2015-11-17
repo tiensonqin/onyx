@@ -21,6 +21,9 @@
       (loop [] 
         (when-let [msg (<!! pending-ch)]
           (while (let [result ^long (.offer ^Publication pub (:buf msg) (:start msg) (:end msg))]
+                   (when (or (= result Publication/BACK_PRESSURED)
+                             (= result Publication/NOT_CONNECTED))
+                     (info "BACKPRESSURE/NOT_CONN" result))
                    (or (= result Publication/BACK_PRESSURED)
                        (= result Publication/NOT_CONNECTED)))
             ;; idle for different amounts of time depending on whether backpressuring or not?
