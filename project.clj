@@ -20,6 +20,7 @@
                  [com.stuartsierra/component "0.3.0"]
                  [com.taoensso/timbre "4.1.4"]
                  [com.taoensso/nippy "2.10.0"]
+                 [danlentz/clj-uuid "0.1.6"]
                  [uk.co.real-logic/aeron-all "0.2.1"]
                  [prismatic/schema "1.0.3"]
                  [org.apache.zookeeper/zookeeper "3.4.6" 

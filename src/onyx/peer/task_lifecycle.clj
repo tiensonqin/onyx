@@ -23,6 +23,7 @@
               [onyx.types :refer [->Route ->Ack ->Results ->Result ->MonitorEvent dec-count! inc-count! map->Event]]
               [onyx.log.commands.peer-replica-view :refer [peer-site]]
               [clj-tuple :as t]
+              [clj-uuid :as uuid]
               [onyx.interop]
               [onyx.state.log.bookkeeper]
               [onyx.state.log.none]
@@ -210,7 +211,7 @@
 
 (defn inject-batch-resources [compiled-before-batch-fn pipeline event]
   (let [rets (-> (compiled-before-batch-fn event)
-                 (assoc :onyx.core/lifecycle-id (java.util.UUID/randomUUID)))]
+                 (assoc :onyx.core/lifecycle-id (uuid/v1)))]
     (taoensso.timbre/trace (format "[%s / %s] Started a new batch"
                                    (:onyx.core/id rets) (:onyx.core/lifecycle-id rets)))
     rets))
