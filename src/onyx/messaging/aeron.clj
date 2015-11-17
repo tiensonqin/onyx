@@ -178,6 +178,7 @@
 (defrecord TrackedPub [publication last-used])
 
 (defn get-publication [messenger {:keys [channel] :as conn-info}]
+  (Thread/sleep (rand-int 6000))
   ;; FIXME, race condition may cause two publications to be created
   (if-let [pub (get @(:publications messenger) channel)]
     (do
