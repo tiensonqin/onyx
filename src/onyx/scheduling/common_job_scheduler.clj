@@ -192,13 +192,13 @@
    peers))
 
 (defn choose-acker-candidates [replica peers]
-  (sort-acker-candidates
-   replica
+  ;sort-acker-candidates
+  ;replica
    (remove
     (fn [p]
       (let [{:keys [job task]} (common/peer->allocated-job (:allocations replica) p)]
         (exempt-from-acker? replica job task)))
-    peers)))
+    peers))
 
 (defn choose-ackers [replica]
   (reduce
