@@ -21,7 +21,7 @@
               [onyx.triggers.triggers-api :as triggers]
               [onyx.extensions :as extensions]
               [onyx.compression.nippy]
-              [onyx.types :refer [->Route ->Ack ->Results ->Result ->MonitorEvent dec-count! inc-count! map->Event]]
+              [onyx.types :refer [->Route ->Ack ->Leaf ->Results ->Result ->MonitorEvent dec-count! inc-count! map->Event]]
               [onyx.log.commands.peer-replica-view :refer [peer-site]]
               [clj-tuple :as t]
               [onyx.interop]
@@ -157,7 +157,12 @@
                             (if route
                               (let [ack-val (acker/gen-ack-value)
                                     grp (get hash-group route)
-                                    leaf** (-> leaf*
+                                    leaf** (->Leaf (:message leaf*) (:id leaf*) (:acker-id leaf*)
+                                                   (:completion-id leaf*)
+                                                   ack-val
+                                                   grp
+                                                   route)
+                                    #_(-> leaf*
                                                (assoc :ack-val ack-val)
                                                (assoc :hash-group grp)
                                                (assoc :route route))]
