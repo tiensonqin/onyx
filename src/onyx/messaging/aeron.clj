@@ -321,7 +321,11 @@
       (if (< i batch-size)
         (if-let [v (poll! ch) #_(first (alts!! [ch timeout-ch]))]
           (recur (conj! segments v) (inc i))
-          (persistent! segments))
+          (do
+            ;; Temporary to reduce cpu burn
+            (when (zero? i)
+              (Thread/sleep 10) )
+            (persistent! segments)))
         (persistent! segments)))))
 
 (defn lookup-channels [messenger id]
