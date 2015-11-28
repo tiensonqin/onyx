@@ -1,5 +1,5 @@
 (ns ^:no-doc onyx.messaging.aeron.publication-manager
-  (:require [taoensso.timbre :refer [error fatal info] :as timbre]
+  (:require [taoensso.timbre :refer [error fatal info warn] :as timbre]
             [clojure.core.async :refer [chan >!! <!! put! close! sliding-buffer thread]])
   (:import [uk.co.real_logic.aeron Aeron Aeron$Context FragmentAssembler Publication Subscription AvailableImageHandler]
            [uk.co.real_logic.agrona ErrorHandler CloseHelper]
@@ -37,7 +37,7 @@
       (fatal "Aeron write from buffer error: " t)
       (stop publication-manager))))
 
-(extend-protocol nil PPublicationManager
+(extend-type nil PPublicationManager
   (write [this buf start end]
     (warn "Attempting to write to nil publication. Cause is probably due to a timeout creating a publication.")))
 
