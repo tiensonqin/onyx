@@ -225,7 +225,7 @@
 (defn read-batch [task-type replica peer-replica-view job-id pipeline event]
   (if (and (= task-type :input) (:backpressure? peer-replica-view))
     (assoc event :onyx.core/batch '())
-    (let [rets (p-ext/read-batch pipeline event)
+    (let [rets (merge event (p-ext/read-batch pipeline event))
           rets ((:onyx.core/compiled-after-read-batch-fn event) rets)]
       (handle-backoff! event)
       rets)))
@@ -428,10 +428,11 @@
     rets))
 
 (defn close-batch-resources [event]
-  (taoensso.timbre/trace (format "[%s / %s] Closed batch plugin resources"
-                                 (:onyx.core/id rets)
-                                 (:onyx.core/lifecycle-id rets)))
-  ((:onyx.core/compiled-after-batch-fn event) event))
+  (let [rets ((:onyx.core/compiled-after-batch-fn event) event)] 
+    (taoensso.timbre/trace (format "[%s / %s] Closed batch plugin resources"
+                                   (:onyx.core/id rets)
+                                   (:onyx.core/lifecycle-id rets)))
+    rets))
 
 (defn launch-aux-threads!
   [messenger {:keys [onyx.core/pipeline
