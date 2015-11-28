@@ -511,10 +511,10 @@
           (:onyx.core/triggers event)))
 
 (defn handle-exception [restart-pred-fn e restart-ch outbox-ch job-id]
-  (warn e)
+  (warn "Exception" e)
   (if (restart-pred-fn e)
     (>!! restart-ch true)
-    (let [entry (entry/create-log-entry :kill-job {:job job-id})]
+    (let [entry (entry/create-log-entry :kill-job {:job job-id :exception (str e)})]
       (>!! outbox-ch entry))))
 
 (defn run-task-lifecycle
