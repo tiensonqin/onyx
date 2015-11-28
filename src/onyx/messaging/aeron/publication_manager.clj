@@ -37,6 +37,10 @@
       (fatal "Aeron write from buffer error: " t)
       (stop publication-manager))))
 
+(extend-protocol nil PPublicationManager
+  (write [this buf start end]
+    (warn "Attempting to write to nil publication. Cause is probably due to a timeout creating a publication.")))
+
 (defrecord PublicationManager [channel stream-id send-idle-strategy connection publication pending-ch write-fut cleanup-fn]
   PPublicationManager
   (start [this]
