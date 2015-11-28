@@ -1,5 +1,5 @@
 (ns ^:no-doc onyx.messaging.aeron
-  (:require [clojure.core.async :refer [chan >!! <!! alts!! timeout close! sliding-buffer]]
+  (:require [clojure.core.async :refer [chan poll! >!! <!! alts!! timeout close! sliding-buffer]]
             [com.stuartsierra.component :as component]
             [taoensso.timbre :refer [fatal info] :as timbre]
             [onyx.messaging.aeron.peer-manager :as pm]
@@ -319,7 +319,7 @@
         timeout-ch (timeout ms)]
     (loop [segments (transient []) i 0]
       (if (< i batch-size)
-        (if-let [v (first (alts!! [ch timeout-ch]))]
+        (if-let [v (poll! ch) #_(first (alts!! [ch timeout-ch]))]
           (recur (conj! segments v) (inc i))
           (persistent! segments))
         (persistent! segments)))))
