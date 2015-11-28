@@ -172,6 +172,7 @@
         subscription (.addSubscription conn channel stream-id)
         subscriber-fut (future (try (.accept ^Consumer (consumer handler idle-strategy 10) subscription)
                                     (catch Throwable e (fatal e))))]
+    (info "Started Aeron subscriber thread on:" bind-addr port stream-id)
     {:conn conn :subscription subscription :subscriber-fut subscriber-fut}))
 
 (defn opts->port [opts]
