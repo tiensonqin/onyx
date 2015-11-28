@@ -228,7 +228,7 @@
     (let [rets (p-ext/read-batch pipeline event)
           rets ((:onyx.core/compiled-after-read-batch-fn event) rets)]
       (handle-backoff! event)
-      (merge event rets))))
+      rets)))
 
 (defn validate-ackable! [peers event]
   (when-not (seq peers)
@@ -428,11 +428,10 @@
     rets))
 
 (defn close-batch-resources [event]
-  (let [rets ((:onyx.core/compiled-after-batch-fn event) event)]
-    (taoensso.timbre/trace (format "[%s / %s] Closed batch plugin resources"
-                                   (:onyx.core/id rets)
-                                   (:onyx.core/lifecycle-id rets)))
-    (merge event rets)))
+  (taoensso.timbre/trace (format "[%s / %s] Closed batch plugin resources"
+                                 (:onyx.core/id rets)
+                                 (:onyx.core/lifecycle-id rets)))
+  ((:onyx.core/compiled-after-batch-fn event) event))
 
 (defn launch-aux-threads!
   [messenger {:keys [onyx.core/pipeline
