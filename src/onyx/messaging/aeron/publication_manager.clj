@@ -71,6 +71,7 @@
           ctx (-> (Aeron$Context.)
                   (.errorHandler error-handler))
           conn (Aeron/connect ctx)
+          _ (info (format "Connecting to publication at: %s, stream-id: %s" channel stream-id))
           pub (.addPublication conn channel stream-id)]
       (info (format "Created publication at: %s, stream-id: %s" channel stream-id))
       (assoc this :publication pub :connection conn))))
