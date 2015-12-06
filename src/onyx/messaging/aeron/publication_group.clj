@@ -64,6 +64,7 @@
   PPublicationGroup
   (add-publication! [this {:keys [stream-id channel] :as conn-spec}]
     (let [write-buffer-size (arg-or-default :onyx.messaging.aeron/write-buffer-size opts)
+          start-time (System/currentTimeMillis)
           pub-manager (-> (pubm/new-publication-manager channel 
                                                         stream-id 
                                                         send-idle-strategy
@@ -71,6 +72,7 @@
                                                         (fn [] (remove-publication! this conn-spec))) 
                           (pubm/connect) 
                           (pubm/start))
+          _ (info "Publication started in " (- (System/currentTimeMillis) start-time))
           tracked-pub (->TrackedPub pub-manager (atom (System/currentTimeMillis)))]
       (swap! publications assoc channel tracked-pub)
       tracked-pub))
