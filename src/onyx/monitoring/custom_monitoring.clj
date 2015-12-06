@@ -33,6 +33,8 @@
    messenger-queue-count
    messenger-queue-count-unregister
    messenger-queue-wait
+   messenger-queue-wait-time
+   messenger-queue-wait-time-unregister
    peer-ack-segments
    peer-ack-segment
    peer-complete-segment

@@ -126,7 +126,7 @@
                                                                      :aeron/port server-port})]
               (reduce (fn [_ command]
                         (case (:command command)
-                          :messages (ext/send-messages send-messenger nil send-link (:payload command))
+                          :messages (ext/send-segments send-messenger nil send-link (:payload command))
                           :complete (ext/internal-complete-message send-messenger nil (:payload command) send-link)
                           :retry (ext/internal-retry-segment send-messenger nil (:payload command) send-link)
                           :acks (ext/internal-ack-segments send-messenger nil send-link (:payload command))))

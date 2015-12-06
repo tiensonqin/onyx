@@ -2,6 +2,7 @@
   (:require [clojure.core.async :refer [chan >!! <!! alts!! timeout close! sliding-buffer]]
             [com.stuartsierra.component :as component]
             [taoensso.timbre :refer [fatal info] :as timbre]
+            [onyx.monitoring.measurements :refer [emit-latency-value]]
             [onyx.messaging.aeron.peer-manager :as pm]
             [onyx.messaging.aeron.publication-manager :as pubm]
             [onyx.messaging.aeron.publication-group :as pg :refer [get-publication]]
@@ -146,9 +147,10 @@
           (= msg-type protocol/messages-msg-id)
           (let [segments (protocol/read-messages-buf decompress-f buffer offset)]
             (when-let [chs (pm/peer-channels @virtual-peers peer-id)]
-              (let [inbound-ch (:inbound-ch chs)]
+              (let [current (System/currentTimeMillis)
+                    inbound-ch (:inbound-ch chs)]
                 (run! (fn [segment]
-                        (>!! inbound-ch segment))
+                        (>!! inbound-ch (list segment current)))
                       segments))))
 
           (= msg-type protocol/completion-msg-id)
@@ -305,8 +307,8 @@
                        sub-count)]
     (->AeronPeerConnection (aeron-channel external-addr port) stream-id acker-id peer-task-id)))
 
-(defmethod extensions/receive-messages AeronConnection
-  [messenger {:keys [onyx.core/task-map onyx.core/messenger-buffer] :as event}]
+(defmethod extensions/receive-segments AeronConnection
+  [messenger {:keys [onyx.core/task-map onyx.core/messenger-buffer onyx.core/monitoring] :as event}]
   ;; We reuse a single timeout channel. This allows us to
   ;; continually block against one thread that is continually
   ;; expiring. This property lets us take variable amounts of
@@ -318,8 +320,10 @@
         timeout-ch (timeout ms)]
     (loop [segments (transient []) i 0]
       (if (< i batch-size)
-        (if-let [v (first (alts!! [ch timeout-ch]))]
-          (recur (conj! segments v) (inc i))
+        (if-let [[v push-time] (first (alts!! [ch timeout-ch]))]
+          (do
+            (emit-latency-value :messenger-queue-wait-time monitoring (- (System/currentTimeMillis) push-time))
+            (recur (conj! segments v) (inc i)))
           (persistent! segments))
         (persistent! segments)))))
 
@@ -329,7 +333,7 @@
       deref
       (pm/peer-channels id)))
 
-(defn send-messages-short-circuit [ch batch]
+(defn send-segments-short-circuit [ch batch]
   (when ch
     (run! (fn [segment]
             (>!! ch segment))
@@ -352,10 +356,10 @@
   (when ch
     (>!! ch retry-id)))
 
-(defmethod extensions/send-messages AeronConnection
+(defmethod extensions/send-segments AeronConnection
   [messenger event {:keys [peer-task-id channel] :as conn-spec} batch]
   (if ((:short-circuitable? messenger) channel)
-    (send-messages-short-circuit (:inbound-ch (lookup-channels messenger peer-task-id)) batch)
+    (send-segments-short-circuit (:inbound-ch (lookup-channels messenger peer-task-id)) batch)
     (let [pub-man (get-publication (:publication-group messenger) conn-spec)
           buf ^UnsafeBuffer (protocol/build-messages-msg-buf (:compress-f messenger) peer-task-id batch)]
       (pubm/write pub-man buf 0 (.capacity buf)))))

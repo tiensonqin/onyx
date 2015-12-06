@@ -14,7 +14,7 @@
   ([event]
    (read-batch event (:onyx.core/messenger event)))
   ([event messenger]
-   {:onyx.core/batch (onyx.extensions/receive-messages messenger event)}))
+   {:onyx.core/batch (onyx.extensions/receive-segments messenger event)}))
 
 (defn write-batch
   ([{:keys [onyx.core/results onyx.core/messenger onyx.core/state
@@ -31,7 +31,7 @@
                        target (pick-peer-fn hash-group)]
                    (when target
                      (when-let [site (peer-site peer-replica-view target)]
-                       (onyx.extensions/send-messages messenger event site segs)))))
+                       (onyx.extensions/send-segments messenger event site segs)))))
                grouped))))
    {}))
 

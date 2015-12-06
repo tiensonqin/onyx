@@ -63,9 +63,9 @@
 
 (defmulti connection-spec (fn [messenger peer-id event peer-site] (type messenger)))
 
-(defmulti receive-messages (fn [messenger event] (type messenger)))
+(defmulti receive-segments (fn [messenger event] (type messenger)))
 
-(defmulti send-messages (fn [messenger event peer-link messages] (type messenger)))
+(defmulti send-segments (fn [messenger event peer-link messages] (type messenger)))
 
 (defmulti close-peer-connection (fn [messenger event link] (type messenger)))
 

@@ -58,6 +58,7 @@ We strongly recommend you run through this checklist before you do so, as it wil
 - [ ] **Setup metrics**: when in production, it is essential that you are able to measure retried messages, input message complete latency, throughput and batch latency. Setup Onyx to use [onyx-metrics](https://github.com/onyx-platform/onyx-metrics). We recommend at very least using the timbre logging plugin, which is easy to setup.
 - [ ] **Ensure your JVM is running with JVM opts -server** Performance will be greatly decreased if you do not run Onyx via Java without at least `-server` JVM opts.
 - [ ] **Setup an external Aeron Media Driver**: If messaging performance is a factor, it is recommended that the Aeron Media Driver is run out of process. First, disable the embedded driver by setting `:onyx.messaging.aeron/embedded-driver? false`. An example out of process media driver is included in [onyx-template](https://github.com/onyx-platform/onyx-template/blob/master/resources/leiningen/new/onyx_app/aeron_media_driver.clj). This media driver can be started via `lein run -m`, or via an uberjar, each by referencing the correct namespace, which contains a main entry point. Ensure that the media driver is started with JVM opts `-server`.
+- [ ] **Setup a periodic call to GC the peer log** At some point the ZooKeeper log that 
 
 #### ZooKeeper
 
