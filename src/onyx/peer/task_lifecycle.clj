@@ -181,25 +181,24 @@
                                    (:onyx.core/id rets) (:onyx.core/lifecycle-id rets)))
     rets))
 
-(defn handle-backoff! [event]
+(defn read-batch [task-type replica peer-replica-view job-id pipeline event]
+  (if (and (= task-type :input) (:backpressure? peer-replica-view))
+    (assoc event :onyx.core/batch (list))
+    (merge event (p-ext/read-batch pipeline event))))
+
+(defn invoke-after-read-batch-lifecycle [event]
+  (call-with-lifecycle-handler
+   event
+   :lifecycle/after-read-batch
+   (:onyx.core/compiled-handle-exception-fn event)
+   (:onyx.core/compiled-after-read-batch-fn event)
+   event))
+
+(defn back-off-after-read-batch [event]
   (let [batch (:onyx.core/batch event)]
     (when (and (= (count batch) 1)
                (= (:message (first batch)) :done))
       (Thread/sleep (:onyx.core/drained-back-off event)))))
-
-(defn read-batch [task-type replica peer-replica-view job-id pipeline event]
-  (if (and (= task-type :input) (:backpressure? peer-replica-view))
-    (assoc event :onyx.core/batch '())
-    (let [rets (merge event (p-ext/read-batch pipeline event))
-          rets
-          (call-with-lifecycle-handler
-           event
-           :lifecycle/after-read-batch
-           (:onyx.core/compiled-handle-exception-fn event)
-           (:onyx.core/compiled-after-read-batch-fn event)
-           rets)]
-      (handle-backoff! event)
-      rets)))
 
 (defn validate-ackable! [peers event]
   (when-not (seq peers)
@@ -484,6 +483,8 @@
         (->> init-event
              (inject-batch-resources compiled-before-batch-fn pipeline)
              (read-batch task-type replica peer-replica-view job-id pipeline)
+             (invoke-after-read-batch-lifecycle)
+             (back-off-after-read-batch)
              (tag-messages task-type replica peer-replica-view id)
              (add-messages-to-timeout-pool task-type state)
              (process-sentinel task-type pipeline monitoring)
