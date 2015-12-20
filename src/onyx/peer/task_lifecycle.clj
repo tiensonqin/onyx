@@ -14,8 +14,6 @@
               [onyx.peer.function :as function]
               [onyx.peer.operation :as operation]
               [onyx.windowing.window-extensions :as we]
-              [onyx.windowing.window-id :as wid]
-              [onyx.windowing.units :as units]
               [onyx.windowing.aggregation :as agg]
               [onyx.triggers.triggers-api :as triggers]
               [onyx.extensions :as extensions]
