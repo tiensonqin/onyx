@@ -231,6 +231,13 @@
             (update new-state :filter state-extensions/apply-filter-id event unique-id)
             new-state))))))
 
+(defn task-params->event-map [event peer-config task-map]
+  (let [fn-params (:onyx.peer/fn-params peer-config)
+        params (into (vec (get fn-params (:onyx/name task-map)))
+                     (map (fn [param] (get task-map param))
+                          (:onyx/params task-map)))]
+    (assoc event :onyx.core/params params)))
+
 (defn flow-conditions->event-map [event flow-conditions task-name]
   (-> event
       (assoc :onyx.core/compiled-norm-fcs
