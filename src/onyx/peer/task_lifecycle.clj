@@ -1,5 +1,5 @@
 (ns ^:no-doc onyx.peer.task-lifecycle
-  (:require [clojure.core.async :refer [alts!! alt!! <!! >!! <! >! timeout chan close! thread go]]
+  (:require [clojure.core.async :refer [alts!! <!! >!! <! >! timeout chan close! thread go]]
             [com.stuartsierra.component :as component]
             [taoensso.timbre :refer [info error warn trace fatal] :as timbre]
             [onyx.static.rotating-seq :as rsc]
