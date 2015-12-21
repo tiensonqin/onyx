@@ -2,7 +2,7 @@
   (:require [onyx.peer.operation :refer [kw->fn] :as operation]
             [onyx.static.planning :refer [find-task]]
             [onyx.static.validation :as validation]
-            [onyx.peer.lifecycle-compile :as lc]
+            [onyx.lifecycles.lifecycle-compile :as lc]
             [onyx.flow-conditions.fc-compile :as fc]
             [onyx.windowing.aggregation :as agg]
             [onyx.windowing.window-extensions :as w]

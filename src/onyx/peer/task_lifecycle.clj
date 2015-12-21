@@ -10,7 +10,7 @@
             [onyx.static.uuid :as uuid]
             [onyx.messaging.acking-daemon :as acker]
             [onyx.peer.task-compile :as c]
-            [onyx.peer.lifecycles :as lc]
+            [onyx.lifecycles.lifecycle-invoke :as lc]
             [onyx.peer.pipeline-extensions :as p-ext]
             [onyx.peer.function :as function]
             [onyx.peer.operation :as operation]

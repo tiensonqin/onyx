@@ -1,4 +1,4 @@
-(ns ^:no-doc onyx.peer.lifecycles
+(ns ^:no-doc onyx.lifecycles.lifecycle-invoke
   (:require [clojure.core.async :refer [>!!]]))
 
 (defn restartable-invocation [event phase handler-fn f & args]

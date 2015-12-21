@@ -1,4 +1,4 @@
-(ns ^:no-doc onyx.peer.lifecycle-compile
+(ns ^:no-doc onyx.lifecycles.lifecycle-compile
   (:require [onyx.static.validation :as validation]
             [onyx.peer.operation :refer [kw->fn]]
             [taoensso.timbre :refer [error]]))
