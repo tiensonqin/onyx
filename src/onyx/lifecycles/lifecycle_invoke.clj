@@ -68,28 +68,24 @@
     event)))
 
 (defn invoke-after-ack [event compiled-lifecycle message-id ack-rets]
-  (merge
+  (restartable-invocation
    event
-   (restartable-invocation
-    event
-    :lifecycle/after-ack-segment
-    (:onyx.core/compiled-handle-exception-fn event)
-    compiled-lifecycle
-    event
-    message-id
-    ack-rets)))
+   :lifecycle/after-ack-segment
+   (:onyx.core/compiled-handle-exception-fn event)
+   compiled-lifecycle
+   event
+   message-id
+   ack-rets))
 
-(defn invoke-after-retry [event compiled-lifecycle message-id complete-rets]
-  (merge
+(defn invoke-after-retry [event compiled-lifecycle message-id retry-rets]
+  (restartable-invocation
    event
-   (restartable-invocation
-    event
-    :lifecycle/after-retry-segment
-    (:onyx.core/compiled-handle-exception-fn event)
-    compiled-lifecycle
-    event
-    message-id
-    complete-rets)))
+   :lifecycle/after-retry-segment
+   (:onyx.core/compiled-handle-exception-fn event)
+   compiled-lifecycle
+   event
+   message-id
+   retry-rets))
 
 (defn invoke-after-task-stop [event]
   ;; This function intentionally does not execute
