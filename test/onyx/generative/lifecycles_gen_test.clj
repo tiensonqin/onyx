@@ -5,7 +5,7 @@
             [clojure.test :refer :all]
             [com.gfredericks.test.chuck :refer [times]]
             [com.gfredericks.test.chuck.clojure-test :refer [checking]]
-            [onyx.peer.task-compile :as c]))
+            [onyx.lifecycles.lifecycle-compile :as c]))
 
 (def task :my-task)
 
