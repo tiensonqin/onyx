@@ -225,16 +225,14 @@
               (list widstate'' [])
               extents)))) 
 
-
-(defn triggers-state-updates [event segment triggers state-log-entries]
-  (let [notification {:segment segment :context :new-segment}] 
-    (reduce
-      (fn [[state entries] {:keys [trigger/window-id] :as t}]
-        (let [[new-window-id-state entry] (triggers/fire-trigger! event (get state window-id) t notification)
-              window-state (assoc state window-id new-window-id-state)]
-          (list window-state (conj entries entry))))
-      state-log-entries
-      triggers)))
+(defn triggers-state-updates [event triggers notification state-log-entries]
+  (reduce
+    (fn [[state entries] {:keys [trigger/window-id] :as t}]
+      (let [[new-window-id-state entry] (triggers/fire-trigger! event (get state window-id) t notification)
+            window-state (assoc state window-id new-window-id-state)]
+        (list window-state (conj entries entry))))
+    state-log-entries
+    triggers))
 
 ;; Fix to not require grouping-fn in window-state-updates
 (defn windows-state-updates [segment grouping-fn windows state-log-entries]
@@ -568,24 +566,28 @@
       (taoensso.timbre/info (format "[%s] Stopping Task LifeCycle, failed to initialize task set up." id)))
     (when-let [event (:pipeline-data component)]
 
-      ;; Fire all triggers on task completion.
-      (doseq [t (:onyx.core/triggers event)]
-        (triggers/fire-trigger! event (:onyx.core/window-state event) t {:context :task-lifecycle-stopped}))
+      ;; At some point trigger state updates for :task-lifecycle-stopped should be stored via store-log-entry here
+      (when-let [triggers (seq (:onyx.core/triggers event))]
+        (triggers-state-updates event 
+                                triggers
+                                {:context :task-lifecycle-stopped}
+                                (list (:state @(:onyx.core/window-state event)) 
+                                      (repeat (inc (count (:onyx.core/windows event))) nil))))
 
       ;; Ensure task operations are finished before closing peer connections
-      (close! (:seal-ch component))
-      (<!! (:task-lifecycle-ch component))
-      (close! (:task-kill-ch component))
+        ;; Ensure task operations are finished before closing peer connections
 
       (<!! (:input-retry-segments-ch component))
-      (<!! (:aux-ch component))
+        (<!! (:input-retry-segments-ch component))
 
       (teardown-triggers event)
+        (teardown-triggers event)
 
       (when-let [state-log (:onyx.core/state-log event)] 
-        (state-extensions/close-log state-log event))
+        (when-let [state-log (:onyx.core/state-log event)] 
 
       (when-let [window-state (:onyx.core/window-state event)] 
+        (when-let [window-state (:onyx.core/window-state event)] 
         (when (exactly-once-task? event)
           (state-extensions/close-filter (:filter @window-state) event)))
 
