@@ -6,6 +6,26 @@
             [onyx.static.default-vals :as d]
             [taoensso.timbre :refer [info warn fatal]]))
 
+; (fn [{:keys [onyx.core/window-state]} trigger]
+;   @window-state)
+
+; {:trigger/setup
+;  :trigger/notifications
+;  :trigger/fire?
+;  :trigger/teardown
+;  :trigger/refinement
+;  :trigger/refine-state 
+;  :trigger/refinement-destructive? }
+
+; {:trigger/setup
+;  :trigger/teardown
+;  :trigger/notifications
+;  :trigger/fire? 
+;  :trigger/refinement}
+
+
+
+
 (defmulti trigger-setup
   "Sets up any vars or state to subsequently
    use in trigger invocations. Must return an
@@ -44,27 +64,15 @@
   (fn [event trigger]
     (:trigger/refinement trigger)))
 
-;; Adapted from Prismatic Plumbing:
-;; https://github.com/Prismatic/plumbing/blob/c53ba5d0adf92ec1e25c9ab3b545434f47bc4156/src/plumbing/core.cljx#L346-L361
-(defn swap-pair!
-  "Like swap! but returns a pair [old-val new-val]"
-  ([a f]
-     (loop []
-       (let [old-val @a
-             new-val (f old-val)]
-         (if (compare-and-set! a old-val new-val)
-           [old-val new-val]
-           (recur)))))
-  ([a f & args]
-     (swap-pair! a #(apply f % args))))
-
 (defmethod refine-state :accumulating
   [{:keys [onyx.core/window-state]} trigger]
   @window-state)
 
-(defmethod refine-state :discarding
-  [{:keys [onyx.core/window-state]} trigger]
-  (first (swap-pair! window-state #(update % :state dissoc (:trigger/window-id trigger)))))
+(def refine-discarding 
+  {:refinement/state-update (fn [event trigger]
+                              (:trigger/window-id trigger))
+   :refinement/apply-state-update (fn [event state state-update]
+                                    (dissoc state state-update))})
 
 (defmethod refinement-destructive? :discarding
   [event trigger]
@@ -85,6 +93,7 @@
 (defn iterate-windows [event trigger window-ids f opts]
   (reduce
    (fn [entries [window-id state]]
+     (info "window state " window-id state)
      (let [window (find-window (:onyx.core/windows event) (:trigger/window-id trigger))
            [lower upper] (we/bounds (:aggregate/record window) window-id)
            args (merge opts
@@ -94,12 +103,19 @@
          (let [window-metadata {:window-id window-id
                                 :lower-bound lower
                                 :upper-bound upper
-                                :context (:context opts)}]
-           (refine-state event trigger)
+                                :context (:context opts)}
+               {:keys [:refinement/state-update :refinement/apply-state-update]} refine-discarding
+               refinement-entry (state-update event trigger)]
+           (swap! (:onyx.core/window-state event) 
+                  update 
+                  :state 
+                  ;; TODO
+                  ;; over grouping here?
+                  (fn [state]
+                    (apply-state-update event state refinement-entry)))
+           (info "refinement entry" refinement-entry)
            ((:trigger/sync-fn trigger) event window trigger window-metadata state)
-           (if (refinement-destructive? event trigger)
-             (conj entries [window-id nil])
-             entries))
+           (conj entries refinement-entry))
          entries)))
    []
    window-ids))
