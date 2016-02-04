@@ -6,19 +6,6 @@
             [onyx.static.default-vals :as d]
             [taoensso.timbre :refer [info warn fatal]]))
 
-;   @window-state)
-
-; {:trigger/setup
-;  :trigger/notifications
-;  :trigger/fire?
-;  :trigger/teardown
-;  :trigger/refinement
-;  :trigger/refine-state 
-;  :trigger/notifications
-;  :trigger/fire? 
-;  :trigger/refinement}
-
-
 (defmulti trigger-setup
   "Sets up any vars or state to subsequently
    use in trigger invocations. Must return an
@@ -90,30 +77,19 @@
   [event trigger]
   event)
 
-   (fn [[window-id-state* entries] [window-id state]]
-     (let [window (find-window (:onyx.core/windows event) (:trigger/window-id trigger))
-           [lower upper] (we/bounds (:aggregate/record window) window-id)
-           args (merge opts
-                       {:window window :window-id window-id
-                        :lower-extent lower :upper-extent upper})]
-       (if (f event trigger args)
-         (let [window-metadata {:window-id window-id
-                                :lower-bound lower
-                                :upper-bound upper
-                                :context (:context opts)}
-               {:keys [:refinement/state-update :refinement/apply-state-update]} refine-accumulating ;refine-discarding
-               refinement-entry (state-update event trigger)]
-           ((:trigger/sync-fn trigger) event window trigger window-metadata state)
-           (list (apply-state-update event window-id-state* refinement-entry)
-                 (conj entries refinement-entry)))
-         entries)))
-   (list window-id-state [])
-   window-id-state))
-
-(defn fire-trigger! [event window-id-state trigger opts]
-  (if (some #{(:context opts)} (trigger-notifications event trigger))
-    (if (:trigger/fire-all-extents? trigger)
-      (when (trigger-fire? event trigger opts)
-        (iterate-windows event trigger window-id-state (constantly true) opts))
-      (iterate-windows event trigger window-id-state trigger-fire? opts)))
-  (list window-id-state []))
+(defn fire-trigger! 
+  [{:keys [onyx.core/windows] :as event} 
+   window-id-state 
+   {:keys [trigger/refinement trigger/window-id trigger/sync-fn] :as trigger}
+   notification 
+   changelog]
+  (let [window (find-window windows window-id)
+        extents-bounds (map (partial we/bounds (:aggregate/record window)) (keys window-id-state))
+        {:keys [:refinement/state-update :refinement/apply-state-update]} (refinements refinement)
+        entry (state-update event trigger window-id-state)
+        opts (merge notification {:extents-bounds extents-bounds
+                                  :refinement-entry entry
+                                  :changelog changelog})
+        new-state (apply-state-update event trigger window-id-state entry)]
+    (sync-fn event window trigger opts window-id-state new-state)
+    (list new-state entry)))
