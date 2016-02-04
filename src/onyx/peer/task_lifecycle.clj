@@ -197,7 +197,7 @@
                replayed-state))))
   event)
 
-(defn window-state-updates [segment widstate w event grouping-fn]
+(defn window-state-updates [segment widstate w grouping-fn]
   (let [window-id (:window/id w)
         record (:aggregate/record w)
         segment-coerced (we/uniform-units record segment)
@@ -225,6 +225,16 @@
               (list widstate'' [])
               extents)))) 
 
+;; Fix to not require grouping-fn in window-state-updates
+(defn windows-state-updates [segment grouping-fn windows initial-window-state initial-log-entries]
+  (reduce (fn [[window-state log-entries] {:keys [window/id] :as window}]
+            (let [window-id-state (get window-state id)
+                  [window-id-state' window-entries] (window-state-updates segment window-id-state window grouping-fn)
+                  window-state' (assoc window-state id window-id-state')]
+              (list window-state' (conj log-entries window-entries))))
+          (list initial-window-state initial-log-entries)
+          windows))
+
 (defn assign-windows
   [{:keys [peer-replica-view] :as compiled} {:keys [onyx.core/windows] :as event}]
   (when (seq windows)
@@ -251,15 +261,7 @@
                         unique-id (if uniqueness-check? (get segment id-key))]
                     (when-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (inc-count! fused-ack)
-                      (let [[new-window-state full-log-entry] 
-                            (reduce (fn [[window-state log-entries] window]
-                                      (let [window-id (:window/id window)
-                                            window-id-state (get window-state window-id)
-                                            [window-id-state' window-entries] (window-state-updates segment window-id-state window event grouping-fn)
-                                            window-state' (assoc window-state window-id window-id-state')]
-                                        (list window-state' (conj log-entries window-entries))))
-                                    (list (:state @window-state) [unique-id])
-                                    windows)]
+                      (let [[new-window-state full-log-entry] (windows-state-updates segment grouping-fn windows (:state @window-state) [unique-id])] 
                         (state-extensions/store-log-entry state-log event ack-fn full-log-entry)
                         (swap! window-state assoc :state new-window-state))
                       (let [trigger-entries
