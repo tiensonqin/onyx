@@ -586,7 +586,7 @@
     (when-let [event (:pipeline-data component)]
 
       ;; At some point trigger state updates for :task-lifecycle-stopped should be stored via store-log-entry here
-      (when-let [triggers (seq (:onyx.core/triggers event))]
+      #_(when-let [triggers (seq (:onyx.core/triggers event))]
         (triggers-state-updates event 
                                 triggers
                                 {:context :task-lifecycle-stopped}
