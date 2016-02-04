@@ -70,8 +70,12 @@
 
 (def test-state (atom []))
 
-(defn update-atom! [event window trigger {:keys [window-id upper-bound lower-bound]} state]
-  (swap! test-state conj [lower-bound upper-bound state]))
+(defn update-atom! [event window trigger {:keys [window extents-bounds changelog refinement-entry] :as opts} old-state new-state]
+  (doall 
+    (map (fn [[extent extent-state] [lower-bound upper-bound]] 
+           (swap! test-state conj [lower-bound upper-bound extent-state]))
+         new-state
+         extents-bounds)))
 
 (def in-chan (atom nil))
 
