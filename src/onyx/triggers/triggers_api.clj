@@ -33,42 +33,6 @@
   (fn [event trigger]
     (:trigger/on trigger)))
 
-(defmulti refine-state
-  "Updates the local window state according to the refinement policy.
-   Must return the new local window state in its entirety."
-  (fn [event trigger]
-    (:trigger/refinement trigger)))
-
-(defmulti refinement-destructive?
-  "Returns true if this refinement mode destructs local state."
-  (fn [event trigger]
-    (:trigger/refinement trigger)))
-
-(defmethod refine-state :accumulating
-  [{:keys [onyx.core/window-state]} trigger]
-  @window-state)
-
-(def refine-discarding 
-  {:refinement/state-update (fn [event trigger state])
-   :refinement/apply-state-update (fn [event trigger state entry]
-                                    {})})
-
-(def refine-accumulating
-  {:refinement/state-update (fn [event trigger state])
-   :refinement/apply-state-update (fn [event trigger state entry]
-                                    state)})
-
-(def refinements {:discarding refine-discarding
-                  :accumulating refine-accumulating})
-
-(defmethod refinement-destructive? :discarding
-  [event trigger]
-  true)
-
-(defmethod refinement-destructive? :default
-  [event trigger]
-  false)
-
 (defmethod trigger-setup :default
   [event trigger]
   event)
@@ -80,13 +44,12 @@
 (defn fire-trigger! 
   [{:keys [onyx.core/windows] :as event} 
    window-id-state 
-   {:keys [trigger/refinement trigger/window-id trigger/sync-fn] :as trigger}
+   {:keys [trigger/window-id trigger/sync-fn refinement/state-update refinement/apply-state-update] :as trigger}
    notification 
    changelog]
   (let [window (find-window windows window-id)
         extents-bounds (map (partial we/bounds (:aggregate/record window)) (keys window-id-state))
-        {:keys [:refinement/state-update :refinement/apply-state-update]} (refinements refinement)
-        entry (state-update event trigger window-id-state)
+        entry (state-update event trigger window-id-state changelog)
         opts (merge notification {:extents-bounds extents-bounds
                                   :refinement-entry entry
                                   :changelog changelog})

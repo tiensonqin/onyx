@@ -6,6 +6,7 @@
             [onyx.lifecycles.lifecycle-compile :as lc]
             [onyx.peer.grouping :as g]
             [onyx.static.uuid :refer [random-uuid]]
+            [onyx.triggers.refinements]
             [onyx.windowing.window-compile :as wc]))
 
 (defn filter-triggers [triggers windows]
@@ -15,9 +16,17 @@
 
 (defn resolve-triggers [triggers]
   (map
-   #(assoc %
-      :trigger/id (random-uuid)
-      :trigger/sync-fn (kw->fn (:trigger/sync %)))
+    (fn [{:keys [trigger/sync trigger/refinement] :as trigger}] 
+      (let [refinement-calls (var-get 
+                               (kw->fn 
+                                 (case refinement
+                                   :accumulating :onyx.triggers.refinements/accumulating
+                                   :discarding :onyx.triggers.refinements/discarding
+                                   refinement)))] 
+        (merge trigger 
+               refinement-calls
+               {:trigger/id (random-uuid)
+                :trigger/sync-fn (kw->fn sync)})))
    triggers))
 
 (defn resolve-window-triggers [triggers windows event]
