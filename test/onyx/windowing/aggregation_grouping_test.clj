@@ -97,7 +97,7 @@
 
         triggers
         [{:trigger/window-id :collect-segments
-          :trigger/refinement :discarding
+          :trigger/refinement :onyx.triggers.refinements/accumulating
           :trigger/on :timer
           :trigger/fire-all-extents? true
           :trigger/period [3 :seconds]

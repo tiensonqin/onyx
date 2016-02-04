@@ -259,7 +259,7 @@
    UnsupportedWindowKey s/Any})
 
 (def TriggerRefinement
-  (s/enum :accumulating :discarding))
+  NamespacedKeyword)
 
 (def TriggerPeriod 
   (s/enum :milliseconds :seconds :minutes :hours :days
@@ -279,7 +279,7 @@
    :trigger/refinement TriggerRefinement
    :trigger/on s/Keyword
    :trigger/sync s/Keyword
-   (s/optional-key :trigger/fire-all-extents?) s/Bool
+   (s/optional-key :trigger/changelog?) s/Bool
    (s/optional-key :trigger/pred) s/Keyword
    (s/optional-key :trigger/watermark-percentage) double
    (s/optional-key :trigger/doc) s/Str

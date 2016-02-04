@@ -12,7 +12,7 @@
                 :window/window-key :event-time
                 :window/range [5 :minutes]}
         trigger {:trigger/window-id :collect-segments
-                 :trigger/refinement :accumulating
+                 :trigger/refinement :onyx.triggers.refinements/accumulating
                  :trigger/on :watermark
                  :trigger/sync ::no-op
                  :trigger/id :trigger-id}
@@ -29,7 +29,7 @@
                 :window/window-key :event-time
                 :window/range [5 :minutes]}
         trigger {:trigger/window-id :collect-segments
-                 :trigger/refinement :accumulating
+                 :trigger/refinement :onyx.triggers.refinements/accumulating
                  :trigger/on :watermark
                  :trigger/sync ::no-op
                  :trigger/id :trigger-id}

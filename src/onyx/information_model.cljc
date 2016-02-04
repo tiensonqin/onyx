@@ -394,17 +394,23 @@
              :added "0.8.0"}
 
             :trigger/refinement
-            {:doc "The refinement mode to use when firing the trigger against a window. When set to `:accumulating`, the window contents remain. When set to `:discarding`, the window contents are destroyed, resetting the window to the initial aggregation value. The initial value is set lazily so expired windows do not unnecessarily consume memory."
+
+            {:doc "The refinement mode to use when firing the trigger against a window. When set to `:onyx.triggers.refinements/accumulating`, the window contents remain. When set to `:onyx.triggers.refinements/discarding`, the window contents are destroyed, resetting the window to the initial aggregation value. The initial value is set lazily so expired windows do not unnecessarily consume memory."
              :type :keyword
-             :choices [:accumulating :discarding]
              :optional? false
              :added "0.8.0"}
-
             :trigger/on
+
             {:doc "The event to trigger in reaction to, such as a segment with a special feature, or on a timer. See the User Guide for the full list of prepackaged Triggers."
              :type :keyword
              :optional? false
              :added "0.8.0"}
+
+            {:doc "Maintains a changelog of state updates between trigger sync calls. This is inexpensive, however it uses additional memory, and may not be appropriate for all trigger/aggregations."
+             :trigger/changelog?
+             :type :boolean
+             :optional? true
+             :default true}
 
             :trigger/sync
             {:doc "A fully qualified, namespaced keyword pointing to a function on the classpath at runtime. This function takes 5 arguments: the event map, the window map that this trigger is defined on, the trigger map, a map with keys (`:window-id`, `:lower-bound`, `:upper-bound`, `:context`) representing window metadata, and the window state as an immutable value. Its return value is ignored. The window metadata keys represent the following:

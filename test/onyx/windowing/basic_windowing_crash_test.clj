@@ -203,7 +203,7 @@
 
         triggers
         [{:trigger/window-id :collect-segments
-          :trigger/refinement :accumulating
+          :trigger/refinement :onyx.triggers.refinements/accumulating
           :trigger/on :segment
           :trigger/fire-all-extents? true
           ;; Align threshhold with batch-size since we'll be restarting

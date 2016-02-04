@@ -16,16 +16,12 @@
 
 (defn resolve-triggers [triggers]
   (map
-    (fn [{:keys [trigger/sync trigger/refinement] :as trigger}] 
-      (let [refinement-calls (var-get 
-                               (kw->fn 
-                                 (case refinement
-                                   :accumulating :onyx.triggers.refinements/accumulating
-                                   :discarding :onyx.triggers.refinements/discarding
-                                   refinement)))] 
+    (fn [{:keys [trigger/sync trigger/refinement trigger/changelog?] :as trigger}] 
+      (let [refinement-calls (var-get (kw->fn refinement))] 
         (merge trigger 
                refinement-calls
-               {:trigger/id (random-uuid)
+               {:trigger/changelog? (if (nil? changelog) true changelog?)
+                :trigger/id (random-uuid)
                 :trigger/sync-fn (kw->fn sync)})))
    triggers))
 
