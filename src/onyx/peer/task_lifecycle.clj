@@ -225,13 +225,18 @@
               (list widstate'' [])
               extents)))) 
 
-(defn triggers-state-updates [event triggers notification state-log-entries]
+(defn triggers-state-updates [event triggers notification state log-entries changelogs]
   (reduce
-    (fn [[state entries] {:keys [trigger/window-id] :as t}]
-      (let [[new-window-id-state entry] (triggers/fire-trigger! event (get state window-id) t notification)
-            window-state (assoc state window-id new-window-id-state)]
-        (list window-state (conj entries entry))))
-    state-log-entries
+    (fn [[state entries cgs] {:keys [trigger/window-id trigger/id] :as t}]
+      (if (and (some #{(:context notification)} (triggers/trigger-notifications event t)) 
+               (triggers/trigger-fire? event t notification))
+        (let [t-changelog (changelogs id)
+              [new-window-id-state entry] (triggers/fire-trigger! event (get state window-id) t notification t-changelog)
+              window-state (assoc state window-id new-window-id-state)
+              updated-changelog (dissoc cgs id)]
+          (list window-state (conj entries entry) updated-changelog))
+        (list state (conj entries nil) cgs)))
+    (list state log-entries changelogs)
     triggers))
 
 ;; Fix to not require grouping-fn in window-state-updates
@@ -243,6 +248,18 @@
               (list window-state (conj log-entries window-entries))))
           state-log-entries
           windows))
+
+(defn add-to-changelogs 
+  "Adds to a map of trigger-ids -> changelogs, where a changelog is a vector of 
+  state updates that have occurred since the last time the trigger fired for a window"
+  [changelog windows triggers log-entry]
+  (let [window-id->changes (zipmap (map :window/id windows) (rest log-entry))]
+    (reduce (fn [m {:keys [trigger/id trigger/window-id]}]
+              (update m id (fn [changes] 
+                             (into (or changes []) 
+                                   (window-id->changes window-id)))))
+            changelog
+            triggers)))
 
 (defn assign-windows
   [{:keys [peer-replica-view] :as compiled} {:keys [onyx.core/windows] :as event}]
@@ -270,10 +287,12 @@
                         unique-id (if uniqueness-check? (get segment id-key))]
                     (when-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (inc-count! fused-ack)
-                      (let [[new-window-state log-entry] (->> (list (:state @window-state) [unique-id])
-                                                              (windows-state-updates segment grouping-fn windows)
-                                                              (triggers-state-updates event segment triggers))] 
-                        (swap! window-state assoc :state new-window-state)
+                      (let [trigger-notification {:segment segment :context :new-segment}
+                            [new-window-state log-entry] (windows-state-updates segment grouping-fn windows (list (:state @window-state) [unique-id]))
+                            changelogs (add-to-changelogs (:changelogs @window-state) windows triggers log-entry)
+                            [new-window-state log-entry updated-changelogs] 
+                            (triggers-state-updates event triggers trigger-notification new-window-state log-entry changelogs)] 
+                        (swap! window-state assoc :state new-window-state :changelogs updated-changelogs)
                         (state-extensions/store-log-entry state-log event ack-fn log-entry)))
                     ;; Always update the filter, to freshen up the fact that the id has been re-seen
                     (when uniqueness-check? 
@@ -574,19 +593,19 @@
                                 (list (:state @(:onyx.core/window-state event)) 
                                       (repeat (inc (count (:onyx.core/windows event))) nil))))
 
-      ;; Ensure task operations are finished before closing peer connections
         ;; Ensure task operations are finished before closing peer connections
+        (close! (:seal-ch component))
+        (<!! (:task-lifecycle-ch component))
+        (close! (:task-kill-ch component))
 
-      (<!! (:input-retry-segments-ch component))
         (<!! (:input-retry-segments-ch component))
+        (<!! (:aux-ch component))
 
-      (teardown-triggers event)
         (teardown-triggers event)
 
-      (when-let [state-log (:onyx.core/state-log event)] 
         (when-let [state-log (:onyx.core/state-log event)] 
+          (state-extensions/close-log state-log event))
 
-      (when-let [window-state (:onyx.core/window-state event)] 
         (when-let [window-state (:onyx.core/window-state event)] 
         (when (exactly-once-task? event)
           (state-extensions/close-filter (:filter @window-state) event)))

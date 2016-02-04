@@ -6,7 +6,6 @@
             [onyx.static.default-vals :as d]
             [taoensso.timbre :refer [info warn fatal]]))
 
-; (fn [{:keys [onyx.core/window-state]} trigger]
 ;   @window-state)
 
 ; {:trigger/setup
@@ -15,15 +14,9 @@
 ;  :trigger/teardown
 ;  :trigger/refinement
 ;  :trigger/refine-state 
-;  :trigger/refinement-destructive? }
-
-; {:trigger/setup
-;  :trigger/teardown
 ;  :trigger/notifications
 ;  :trigger/fire? 
 ;  :trigger/refinement}
-
-
 
 
 (defmulti trigger-setup
@@ -43,7 +36,7 @@
   "Returns true if this trigger should fire, therefore refinining the
    state of each extent in this window and invoking the trigger sync function.
    This function is invoked exactly once per window, so this function may
-   perform side-effects such as mainining counters."
+   perform side-effects such as maintaining counters."
   (fn [event trigger & args]
     (:trigger/on trigger)))
 
@@ -69,15 +62,17 @@
   @window-state)
 
 (def refine-discarding 
-  {:refinement/state-update (fn [event trigger]
-                              (:trigger/window-id trigger))
-   :refinement/apply-state-update (fn [event state state-update]
-                                    (dissoc state state-update))})
+  {:refinement/state-update (fn [event trigger state])
+   :refinement/apply-state-update (fn [event trigger state entry]
+                                    {})})
 
 (def refine-accumulating
-  {:refinement/state-update (fn [event trigger])
-   :refinement/apply-state-update (fn [event state state-update]
+  {:refinement/state-update (fn [event trigger state])
+   :refinement/apply-state-update (fn [event trigger state entry]
                                     state)})
+
+(def refinements {:discarding refine-discarding
+                  :accumulating refine-accumulating})
 
 (defmethod refinement-destructive? :discarding
   [event trigger]
@@ -95,16 +90,6 @@
   [event trigger]
   event)
 
-; (swap! (:onyx.core/window-state event) 
-;                   update 
-;                   :state 
-;                   ;; TODO
-;                   ;; over grouping here?
-;                   (fn [state]
-;                     (apply-state-update event state refinement-entry)))
-
-(defn iterate-windows [event trigger window-id-state f opts]
-  (reduce
    (fn [[window-id-state* entries] [window-id state]]
      (let [window (find-window (:onyx.core/windows event) (:trigger/window-id trigger))
            [lower upper] (we/bounds (:aggregate/record window) window-id)
