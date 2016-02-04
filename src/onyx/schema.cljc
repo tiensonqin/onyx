@@ -286,6 +286,8 @@
    :trigger/refinement TriggerRefinement
    :trigger/on s/Keyword
    :trigger/sync s/Keyword
+   (s/optional-key :trigger/fire-all-extents?)
+   (deprecated [:trigger-entry :model :trigger/fire-all-extents?])
    (s/optional-key :trigger/changelog?) s/Bool
    (s/optional-key :trigger/pred) s/Keyword
    (s/optional-key :trigger/watermark-percentage) double

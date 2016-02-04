@@ -95,7 +95,6 @@
         [{:trigger/window-id :collect-segments
           :trigger/refinement :onyx.triggers.refinements/accumulating
           :trigger/on :segment
-          :trigger/fire-all-extents? true
           :trigger/threshold [15 :elements]
           :trigger/sync ::update-atom!}]
 

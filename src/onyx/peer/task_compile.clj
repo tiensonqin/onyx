@@ -20,7 +20,7 @@
       (let [refinement-calls (var-get (kw->fn refinement))] 
         (merge trigger 
                refinement-calls
-               {:trigger/changelog? (if (nil? changelog) true changelog?)
+               {:trigger/changelog? (if (nil? changelog?) true changelog?)
                 :trigger/id (random-uuid)
                 :trigger/sync-fn (kw->fn sync)})))
    triggers))

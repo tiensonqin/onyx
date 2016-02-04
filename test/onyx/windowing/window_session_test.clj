@@ -60,11 +60,14 @@
 
 (def test-state (atom []))
 
-(defn update-atom! [event window trigger {:keys [window-id upper-bound lower-bound]} state]
-  (swap! test-state conj
-         [(java.util.Date. lower-bound)
-          (java.util.Date. upper-bound)
-          state]))
+(defn update-atom! [event window trigger {:keys [window extents-bounds changelog refinement-entry] :as opts} old-state new-state]
+  (doall 
+    (map (fn [[extent extent-state] [lower-bound upper-bound]] 
+           (swap! test-state conj [(java.util.Date. lower-bound)
+                                   (java.util.Date. upper-bound)
+                                   extent-state]))
+         old-state
+         extents-bounds)))
 
 (def in-chan (atom nil))
 
@@ -128,7 +131,6 @@
         [{:trigger/window-id :collect-segments
           :trigger/refinement :onyx.triggers.refinements/accumulating
           :trigger/on :segment
-          :trigger/fire-all-extents? true
           :trigger/threshold [15 :elements]
           :trigger/sync ::update-atom!}]
 

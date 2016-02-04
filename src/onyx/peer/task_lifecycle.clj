@@ -18,6 +18,7 @@
               [onyx.windowing.window-extensions :as we]
               [onyx.windowing.aggregation :as agg]
               [onyx.triggers.triggers-api :as triggers]
+              [onyx.triggers.refinements]
               [onyx.extensions :as extensions]
               [onyx.types :refer [->Ack ->Results ->MonitorEvent dec-count! inc-count! map->Event map->Compiled]]
               [onyx.peer.transform :refer [apply-fn]]
@@ -259,7 +260,7 @@
                              (into (or changes []) 
                                    (window-id->changes window-id)))))
             changelog
-            triggers)))
+            (filter :trigger/changelog? triggers))))
 
 (defn assign-windows
   [{:keys [peer-replica-view] :as compiled} {:keys [onyx.core/windows] :as event}]

@@ -396,35 +396,35 @@
              :added "0.8.0"}
 
             :trigger/refinement
-
             {:doc "The refinement mode to use when firing the trigger against a window. When set to `:onyx.triggers.refinements/accumulating`, the window contents remain. When set to `:onyx.triggers.refinements/discarding`, the window contents are destroyed, resetting the window to the initial aggregation value. The initial value is set lazily so expired windows do not unnecessarily consume memory."
              :type :keyword
              :optional? false
              :added "0.8.0"}
-            :trigger/on
 
+            :trigger/on
             {:doc "The event to trigger in reaction to, such as a segment with a special feature, or on a timer. See the User Guide for the full list of prepackaged Triggers."
              :type :keyword
              :optional? false
              :added "0.8.0"}
 
+            :trigger/changelog?
             {:doc "Maintains a changelog of state updates between trigger sync calls. This is inexpensive, however it uses additional memory, and may not be appropriate for all trigger/aggregations."
-             :trigger/changelog?
              :type :boolean
              :optional? true
+             :added "0.8.10"
              :default true}
 
             :trigger/sync
             {:doc "A fully qualified, namespaced keyword pointing to a function on the classpath at runtime. This function takes 5 arguments: the event map, the window map that this trigger is defined on, the trigger map, a map with keys (`:window-id`, `:lower-bound`, `:upper-bound`, `:context`) representing window metadata, and the window state as an immutable value. Its return value is ignored. The window metadata keys represent the following:
 
-- `:window-id`: a unique ID representing this concrete instance of a window. The ID is only unique among windows for a particular `:window/id` in the Onyx job.
-- `:lower-bound` - The lowermost value of any window key for a segment that belongs to this window
-- `:upper-bound` - The uppermost value of any window key for a segment that belongs to this window
-- `:context` - a keyword representing the context that caused this trigger to fire
+                  - `:window-id`: a unique ID representing this concrete instance of a window. The ID is only unique among windows for a particular `:window/id` in the Onyx job.
+                  - `:lower-bound` - The lowermost value of any window key for a segment that belongs to this window
+                  - `:upper-bound` - The uppermost value of any window key for a segment that belongs to this window
+                  - `:context` - a keyword representing the context that caused this trigger to fire
 
- This function is invoked when the trigger fires, and is used to do any arbitrary action with the window contents, such as sync them to a database. It is called once *per window instance*. In other words, if a fixed window exists with 5 instances, the firing of a Timer trigger will call the sync function 5 times.
+                  This function is invoked when the trigger fires, and is used to do any arbitrary action with the window contents, such as sync them to a database. It is called once *per window instance*. In other words, if a fixed window exists with 5 instances, the firing of a Timer trigger will call the sync function 5 times.
 
-You can use lifecycles to supply any stateful connections necessary to sync your data. Supplied values from lifecycles will be available through the first parameter - the event map."
+                  You can use lifecycles to supply any stateful connections necessary to sync your data. Supplied values from lifecycles will be available through the first parameter - the event map."
              :type :keyword
              :optional? false
              :added "0.8.0"}
@@ -460,6 +460,8 @@ You can use lifecycles to supply any stateful connections necessary to sync your
              :type :boolean
              :optional? true
              :default false
+             :deprecated-version "0.8.10"
+             :deprecation-doc ":trigger/fire-all-extents? has been removed from Onyx. Triggers now fire over the full window state, and it is up to the trigger to individual function on each window-extent."
              :added "0.8.0"}
 
             :trigger/doc
@@ -1130,7 +1132,7 @@ You can use lifecycles to supply any stateful connections necessary to sync your
    :state-aggregation
    [:aggregation/init :aggregation/fn :aggregation/apply-state-update :aggregation/super-aggregation-fn] 
    :trigger-entry
-   [:trigger/window-id :trigger/refinement :trigger/on :trigger/sync
+   [:trigger/window-id :trigger/refinement :trigger/on :trigger/sync :trigger/changelog?
     :trigger/period :trigger/threshold :trigger/pred :trigger/watermark-percentage :trigger/fire-all-extents?
     :trigger/doc] 
    :lifecycle-entry
