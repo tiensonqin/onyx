@@ -235,6 +235,17 @@
           (list initial-window-state initial-log-entries)
           windows))
 
+(defn triggers-state-updates [event segment triggers initial-window-state initial-log-entries]
+  (let [notification {:segment segment :context :new-segment}] 
+    (reduce
+      (fn [[state entries] t]
+        (list state (conj entries (triggers/fire-trigger! event 
+                                                          ;; to be replaced
+                                                          (:onyx.core/window-state event)
+                                                          #_state t notification))))
+      (list nil #_initial-window-state initial-log-entries)
+      triggers)))
+
 (defn assign-windows
   [{:keys [peer-replica-view] :as compiled} {:keys [onyx.core/windows] :as event}]
   (when (seq windows)
@@ -261,19 +272,13 @@
                         unique-id (if uniqueness-check? (get segment id-key))]
                     (when-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (inc-count! fused-ack)
-                      (let [[new-window-state full-log-entry] (windows-state-updates segment grouping-fn windows (:state @window-state) [unique-id])] 
-                        (state-extensions/store-log-entry state-log event ack-fn full-log-entry)
-                        (swap! window-state assoc :state new-window-state))
-                      (let [trigger-entries
-                            (reduce
-                             (fn [entries t]
-                               (into
-                                entries
-                                [nil
-                                 (triggers/fire-trigger! event window-state t {:segment segment :context :new-segment})]))
-                             []
-                             triggers)]
-                        (state-extensions/store-log-entry state-log event (constantly true) trigger-entries)))
+                      (let [[new-window-state log-entry] (windows-state-updates segment grouping-fn windows (:state @window-state) [unique-id])
+                            _ (swap! window-state assoc :state new-window-state)
+
+                            [_ log-entry] (triggers-state-updates event segment triggers nil log-entry)] 
+
+                        (println "log entry " log-entry)
+                        (state-extensions/store-log-entry state-log event ack-fn log-entry)))
                     ;; Always update the filter, to freshen up the fact that the id has been re-seen
                     (when uniqueness-check? 
                       (swap! window-state update :filter state-extensions/apply-filter-id event unique-id))))
