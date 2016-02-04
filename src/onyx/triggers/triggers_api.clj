@@ -74,6 +74,11 @@
    :refinement/apply-state-update (fn [event state state-update]
                                     (dissoc state state-update))})
 
+(def refine-accumulating
+  {:refinement/state-update (fn [event trigger])
+   :refinement/apply-state-update (fn [event state state-update]
+                                    state)})
+
 (defmethod refinement-destructive? :discarding
   [event trigger]
   true)
@@ -90,10 +95,17 @@
   [event trigger]
   event)
 
-(defn iterate-windows [event trigger window-ids f opts]
+; (swap! (:onyx.core/window-state event) 
+;                   update 
+;                   :state 
+;                   ;; TODO
+;                   ;; over grouping here?
+;                   (fn [state]
+;                     (apply-state-update event state refinement-entry)))
+
+(defn iterate-windows [event trigger window-id-state f opts]
   (reduce
-   (fn [entries [window-id state]]
-     (info "window state " window-id state)
+   (fn [[window-id-state* entries] [window-id state]]
      (let [window (find-window (:onyx.core/windows event) (:trigger/window-id trigger))
            [lower upper] (we/bounds (:aggregate/record window) window-id)
            args (merge opts
@@ -104,26 +116,19 @@
                                 :lower-bound lower
                                 :upper-bound upper
                                 :context (:context opts)}
-               {:keys [:refinement/state-update :refinement/apply-state-update]} refine-discarding
+               {:keys [:refinement/state-update :refinement/apply-state-update]} refine-accumulating ;refine-discarding
                refinement-entry (state-update event trigger)]
-           (swap! (:onyx.core/window-state event) 
-                  update 
-                  :state 
-                  ;; TODO
-                  ;; over grouping here?
-                  (fn [state]
-                    (apply-state-update event state refinement-entry)))
-           (info "refinement entry" refinement-entry)
            ((:trigger/sync-fn trigger) event window trigger window-metadata state)
-           (conj entries refinement-entry))
+           (list (apply-state-update event window-id-state* refinement-entry)
+                 (conj entries refinement-entry)))
          entries)))
-   []
-   window-ids))
+   (list window-id-state [])
+   window-id-state))
 
-(defn fire-trigger! [event window-state trigger opts]
-  (when (some #{(:context opts)} (trigger-notifications event trigger))
-    (let [window-ids (get-in @window-state [:state (:trigger/window-id trigger)])]
-      (if (:trigger/fire-all-extents? trigger)
-        (when (trigger-fire? event trigger opts)
-          (iterate-windows event trigger window-ids (constantly true) opts))
-        (iterate-windows event trigger window-ids trigger-fire? opts)))))
+(defn fire-trigger! [event window-id-state trigger opts]
+  (if (some #{(:context opts)} (trigger-notifications event trigger))
+    (if (:trigger/fire-all-extents? trigger)
+      (when (trigger-fire? event trigger opts)
+        (iterate-windows event trigger window-id-state (constantly true) opts))
+      (iterate-windows event trigger window-id-state trigger-fire? opts)))
+  (list window-id-state []))

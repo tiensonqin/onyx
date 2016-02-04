@@ -225,26 +225,26 @@
               (list widstate'' [])
               extents)))) 
 
-;; Fix to not require grouping-fn in window-state-updates
-(defn windows-state-updates [segment grouping-fn windows initial-window-state initial-log-entries]
-  (reduce (fn [[window-state log-entries] {:keys [window/id] :as window}]
-            (let [window-id-state (get window-state id)
-                  [window-id-state' window-entries] (window-state-updates segment window-id-state window grouping-fn)
-                  window-state' (assoc window-state id window-id-state')]
-              (list window-state' (conj log-entries window-entries))))
-          (list initial-window-state initial-log-entries)
-          windows))
 
-(defn triggers-state-updates [event segment triggers initial-window-state initial-log-entries]
+(defn triggers-state-updates [event segment triggers state-log-entries]
   (let [notification {:segment segment :context :new-segment}] 
     (reduce
-      (fn [[state entries] t]
-        (list state (conj entries (triggers/fire-trigger! event 
-                                                          ;; to be replaced
-                                                          (:onyx.core/window-state event)
-                                                          #_state t notification))))
-      (list nil #_initial-window-state initial-log-entries)
+      (fn [[state entries] {:keys [trigger/window-id] :as t}]
+        (let [[new-window-id-state entry] (triggers/fire-trigger! event (get state window-id) t notification)
+              window-state (assoc state window-id new-window-id-state)]
+          (list window-state (conj entries entry))))
+      state-log-entries
       triggers)))
+
+;; Fix to not require grouping-fn in window-state-updates
+(defn windows-state-updates [segment grouping-fn windows state-log-entries]
+  (reduce (fn [[state log-entries] {:keys [window/id] :as window}]
+            (let [window-id-state (get state id)
+                  [window-id-state' window-entries] (window-state-updates segment window-id-state window grouping-fn)
+                  window-state (assoc state id window-id-state')]
+              (list window-state (conj log-entries window-entries))))
+          state-log-entries
+          windows))
 
 (defn assign-windows
   [{:keys [peer-replica-view] :as compiled} {:keys [onyx.core/windows] :as event}]
@@ -272,12 +272,10 @@
                         unique-id (if uniqueness-check? (get segment id-key))]
                     (when-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (inc-count! fused-ack)
-                      (let [[new-window-state log-entry] (windows-state-updates segment grouping-fn windows (:state @window-state) [unique-id])
-                            _ (swap! window-state assoc :state new-window-state)
-
-                            [_ log-entry] (triggers-state-updates event segment triggers nil log-entry)] 
-
-                        (println "log entry " log-entry)
+                      (let [[new-window-state log-entry] (->> (list (:state @window-state) [unique-id])
+                                                              (windows-state-updates segment grouping-fn windows)
+                                                              (triggers-state-updates event segment triggers))] 
+                        (swap! window-state assoc :state new-window-state)
                         (state-extensions/store-log-entry state-log event ack-fn log-entry)))
                     ;; Always update the filter, to freshen up the fact that the id has been re-seen
                     (when uniqueness-check? 
