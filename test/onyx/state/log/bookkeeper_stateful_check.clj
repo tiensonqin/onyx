@@ -43,7 +43,6 @@
                   :onyx.core/task-kill-ch (chan)
                   :onyx.core/peer-opts peer-config}] 
     (-> pipeline
-        (assoc :onyx.core/acking-state (->AckingState (atom {})))
         (assoc :onyx.core/window-state (->WindowState (state-ext/initialize-filter :set pipeline) (init-state) {}))
         (assoc :onyx.core/state-log (state-ext/initialize-log :bookkeeper pipeline)))))
 
