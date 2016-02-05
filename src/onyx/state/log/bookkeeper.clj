@@ -122,7 +122,7 @@
                                 (fn [] 
                                   (close! (:onyx.core/restart-ch event))))))))))
 
-(defn take-write-batch [batch-size batch-ch]
+(defn take-write-batch [batch-ch batch-size]
   (loop [entries [] ack-fns [] i 0]
     (if (< i batch-size)
       (let [[entry ack-fn] (poll! batch-ch)]
@@ -138,7 +138,7 @@
   (thread
     (let [batch-size (arg-or-default :onyx.bookkeeper/write-batch-size peer-opts)
           batch-backoff (arg-or-default :onyx.bookkeeper/write-batch-backoff peer-opts)]
-      (loop [[batch ack-fns] (take-write-batch batch-size batch-ch)]
+      (loop [[batch ack-fns] (take-write-batch batch-ch batch-size)]
         ;; Safe point to transition to the next ledger handle
         (when @next-ledger-handle
           (compaction-transition log event))
@@ -151,7 +151,7 @@
                                 (fn [] (close! (:onyx.core/restart-ch event))))))
         (if (and (not (closed? kill-ch))
                  (not (closed? task-kill-ch)))
-          (recur (take-write-batch batch-size batch-ch)))))
+          (recur (take-write-batch batch-ch batch-size)))))
           (info "BookKeeper: shutting down batch processing")))
 
 (defn assign-bookkeeper-log-id-spin [{:keys [onyx.core/peer-opts
