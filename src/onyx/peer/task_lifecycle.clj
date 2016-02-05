@@ -285,8 +285,9 @@
               (run! 
                 (fn [message]
                   (let [segment (:message message)
-                        unique-id (if uniqueness-check? (get segment id-key))]
-                    (when-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
+                        unique-id (if uniqueness-check? (get segment id-key))
+                        filter? (and unique-id (state-extensions/filter? (:filter @window-state) event unique-id))]
+                    (when-not filter?
                       (inc-count! fused-ack)
                       (let [initial-entry [unique-id]
                             [new-window-state log-entry] (windows-state-updates segment grouping-fn windows (list (:state @window-state) initial-entry))
@@ -446,13 +447,15 @@
 
 (defrecord TaskState [timeout-pool])
 
-(defrecord WindowState [filter state])
+(defrecord WindowState [filter state changelogs ack-state])
 
 (defn resolve-window-state [{:keys [onyx.core/peer-opts] :as pipeline}]
   (let [filter-impl (arg-or-default :onyx.peer/state-filter-impl peer-opts)] 
     (assoc pipeline :onyx.core/window-state (if (windowed-task? pipeline)
                                               (atom (->WindowState (if (exactly-once-task? pipeline) 
                                                                      (state-extensions/initialize-filter filter-impl pipeline)) 
+                                                                   {}
+                                                                   {}
                                                                    {}))))))
 
 (defrecord TaskInformation 
