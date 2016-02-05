@@ -288,12 +288,12 @@
                         unique-id (if uniqueness-check? (get segment id-key))]
                     (when-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (inc-count! fused-ack)
-                      (let [trigger-notification {:segment segment :context :new-segment}
-                            [new-window-state log-entry] (windows-state-updates segment grouping-fn windows (list (:state @window-state) [unique-id]))
-                            changelogs (add-to-changelogs (:changelogs @window-state) windows triggers log-entry)
-                            [new-window-state log-entry updated-changelogs] 
-                            (triggers-state-updates event triggers trigger-notification new-window-state log-entry changelogs)] 
-                        (swap! window-state assoc :state new-window-state :changelogs updated-changelogs)
+                      (let [initial-entry [unique-id]
+                            [new-window-state log-entry] (windows-state-updates segment grouping-fn windows (list (:state @window-state) initial-entry))
+                            changes (add-to-changelogs (:changelogs @window-state) windows triggers log-entry)
+                            notification {:segment segment :context :new-segment}
+                            [new-window-state log-entry changes*] (triggers-state-updates event triggers notification new-window-state log-entry changes)] 
+                        (swap! window-state assoc :state new-window-state :changelogs changes*)
                         (state-extensions/store-log-entry state-log event ack-fn log-entry)))
                     ;; Always update the filter, to freshen up the fact that the id has been re-seen
                     (when uniqueness-check? 
