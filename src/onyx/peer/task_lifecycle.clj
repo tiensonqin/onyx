@@ -30,9 +30,10 @@
 
 (defrecord TaskState [timeout-pool])
 
+;; Rename to something like DependentAck, or Trigger ack?
 (defprotocol AckState 
-  (buffer-ack [this id ack-fn])
-  (buffer-filtered-ack [this id ack-fn])
+  (prepare-ack [this id ack-fn])
+  (defer-filtered-ack [this id ack-fn])
   (flush-acks [this id]))
 
 ;; Adapted from Prismatic Plumbing:
@@ -51,8 +52,7 @@
 
 (defrecord AckingState [ack-state]
   AckState
-  (buffer-ack [this id ack-fn]
-    (info "buffer " id)
+  (prepare-ack [this id ack-fn]
     (swap! ack-state
            (fn [s] 
              (if (s id)
@@ -60,8 +60,7 @@
                (assoc s id (list ack-fn)))))
     this)
 
-  (buffer-filtered-ack [this id ack-fn]
-    (info "buffer filtered " id)
+  (defer-filtered-ack [this id ack-fn]
     (swap! ack-state 
            (fn [s]
              (if (s id)
@@ -70,11 +69,9 @@
     this)
 
   (flush-acks [this id]
-    (info "flush-acks" id)
     (let [[old-val new-val] (swap-pair! ack-state (fn [s] (dissoc s id)))]
       (when-not (= old-val new-val)
         (run! (fn [f] 
-                (info "acking for " id f)
                 (f)) 
               (old-val id))) 
       this)))
@@ -341,9 +338,9 @@
                   (let [segment (:message message)
                         unique-id (if uniqueness-check? (get segment id-key))
                         ;; Create two acking protocols, decide on them based on uniqueness-check? in task-map at task-start
-                        ack-buffer-fn (when uniqueness-check? (fn [] (buffer-ack acking-state unique-id ack-fn)) (fn []))
-                        ack-flush-fn (when uniqueness-check? (fn [] (flush-acks acking-state unique-id)) ack-fn)
-                        ack-filtered-fn (when uniqueness-check? (fn [] (buffer-filtered-ack acking-state unique-id ack-fn)) (fn []))]
+                        ack-buffer-fn (if uniqueness-check? (fn [] (prepare-ack acking-state unique-id ack-fn)) (fn []))
+                        ack-flush-fn (if uniqueness-check? (fn [] (flush-acks acking-state unique-id)) ack-fn)
+                        ack-deferred-fn (if uniqueness-check? (fn [] (defer-filtered-ack acking-state unique-id ack-fn)) (fn []))]
                     ;; don't use unique-id as the id may be nil
                     (if-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (let [_ (inc-count! fused-ack)
@@ -355,7 +352,7 @@
                             [new-window-state log-entry changes*] (triggers-state-updates event triggers notification new-window-state log-entry changes)] 
                         (swap! window-state assoc :state new-window-state :changelogs changes*)
                         (state-extensions/store-log-entry state-log event ack-flush-fn log-entry))
-                      (ack-filtered-fn))
+                      (ack-deferred-fn))
                     ;; Always update the filter, to freshen up the fact that the id has been re-seen
                     (when uniqueness-check? 
                       (swap! window-state update :filter state-extensions/apply-filter-id event unique-id))))
