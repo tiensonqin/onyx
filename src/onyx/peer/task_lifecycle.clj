@@ -33,7 +33,7 @@
 ;; Rename to something like DependentAck, or Trigger ack?
 (defprotocol AckState 
   (prepare-ack [this id ack-fn])
-  (defer-filtered-ack [this id ack-fn])
+  (defer-filtered-ack [this id ack-fn ack-deferred-fn])
   (flush-acks [this id]))
 
 ;; Adapted from Prismatic Plumbing:
@@ -56,17 +56,20 @@
     (swap! ack-state
            (fn [s] 
              (if (s id)
+               ;; This shouldn't ever happen :/. Maybe we should overwrite here
                s
                (assoc s id (list ack-fn)))))
     this)
 
-  (defer-filtered-ack [this id ack-fn]
-    (swap! ack-state 
-           (fn [s]
-             (if (s id)
-               (update s id conj ack-fn)
-               s)))
-    this)
+  (defer-filtered-ack [this id ack-fn ack-deferred-fn]
+    (let [[old-val new-val] (swap-pair! ack-state 
+                                        (fn [s]
+                                          (if (s id)
+                                            (update s id conj ack-fn)
+                                            s)))]
+      (when-not (= old-val new-val)
+        (ack-deferred-fn)) 
+      this))
 
   (flush-acks [this id]
     (let [[old-val new-val] (swap-pair! ack-state (fn [s] (dissoc s id)))]
@@ -340,7 +343,9 @@
                         ;; Create two acking protocols, decide on them based on uniqueness-check? in task-map at task-start
                         ack-buffer-fn (if uniqueness-check? (fn [] (prepare-ack acking-state unique-id ack-fn)) (fn []))
                         ack-flush-fn (if uniqueness-check? (fn [] (flush-acks acking-state unique-id)) ack-fn)
-                        ack-deferred-fn (if uniqueness-check? (fn [] (defer-filtered-ack acking-state unique-id ack-fn)) (fn []))]
+                        ack-deferred-fn (if uniqueness-check? 
+                                          (fn [] (defer-filtered-ack acking-state unique-id ack-fn (fn [] (inc-count! fused-ack)))) 
+                                          (fn []))]
                     ;; don't use unique-id as the id may be nil
                     (if-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
                       (let [_ (inc-count! fused-ack)
