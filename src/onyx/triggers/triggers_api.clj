@@ -49,10 +49,11 @@
    changelog]
   (let [window (find-window windows window-id)
         extent->bounds #(we/bounds (:aggregate/record window) %)
-        entry (state-update event trigger window-id-state changelog)
         opts (merge notification {:extent->bounds extent->bounds
-                                  :refinement-entry entry
                                   :changelog changelog})
-        new-state (apply-state-update event trigger window-id-state entry)]
-    (sync-fn event window trigger opts window-id-state new-state)
+        entry (state-update event trigger opts window-id-state)
+        new-state (apply-state-update event trigger window-id-state entry)
+        opts (merge opts {:refinement {:entry entry
+                                       :new-state new-state}})]
+    (sync-fn event window trigger opts new-state)
     (list new-state entry)))

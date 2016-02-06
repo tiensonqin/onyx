@@ -33,14 +33,14 @@
 
 (def test-state (atom []))
 
-(defn update-atom! [event window trigger {:keys [window extent->bounds changelog refinement-entry] :as opts} old-state new-state]
+(defn update-atom! [event window trigger {:keys [window extent->bounds changelog] :as opts} state]
   (doall 
     (map (fn [[extent extent-state] [lower-bound upper-bound]] 
            (swap! test-state conj [(java.util.Date. lower-bound)
                                    (java.util.Date. upper-bound)
                                    extent-state]))
-         old-state
-         (map extent->bounds (keys old-state)))))
+         state
+         (map extent->bounds (keys state)))))
 
 (def in-chan (atom nil))
 
