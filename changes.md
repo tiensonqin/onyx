@@ -1,3 +1,8 @@
+#### 0.9.0
+- Changed the internal messaging functions to no longer supply the event map.
+  Note, this will break any plugins that manually manage the ack count, such as
+  plugins using async callbacks.
+
 #### 0.8.8
 
 - Fixed a problem with a file in Onyx's test suite that was causing problems for the release process. No functional changes in this release.

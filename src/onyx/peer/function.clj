@@ -31,7 +31,7 @@
                        target (pick-peer-fn hash-group)]
                    (when target
                      (when-let [site (peer-site peer-replica-view target)]
-                       (onyx.extensions/send-messages messenger event site segs)))))
+                       (onyx.extensions/send-messages messenger site segs)))))
                grouped))))
    {}))
 
