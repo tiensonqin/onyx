@@ -21,6 +21,7 @@
               [onyx.triggers.refinements]
               [onyx.extensions :as extensions]
               [onyx.types :refer [->Ack ->Results ->MonitorEvent dec-count! inc-count! map->Event map->Compiled]]
+              [onyx.state.ack :as st-ack]
               [onyx.peer.transform :refer [apply-fn]]
               [onyx.peer.grouping :as g]
               [onyx.flow-conditions.fc-routing :as r]
@@ -29,55 +30,6 @@
               [onyx.static.default-vals :refer [defaults arg-or-default]]))
 
 (defrecord TaskState [timeout-pool])
-
-;; Rename to something like DependentAck, or Trigger ack?
-(defprotocol AckState 
-  (prepare-ack [this id ack-fn])
-  (defer-filtered-ack [this id ack-fn ack-deferred-fn])
-  (flush-acks [this id]))
-
-;; Adapted from Prismatic Plumbing:
-;; https://github.com/Prismatic/plumbing/blob/c53ba5d0adf92ec1e25c9ab3b545434f47bc4156/src/plumbing/core.cljx#L346-L361
-(defn swap-pair!
-  "Like swap! but returns a pair [old-val new-val]"
-  ([a f]
-     (loop []
-       (let [old-val @a
-             new-val (f old-val)]
-         (if (compare-and-set! a old-val new-val)
-           [old-val new-val]
-           (recur)))))
-  ([a f & args]
-     (swap-pair! a #(apply f % args))))
-
-(defrecord AckingState [ack-state]
-  AckState
-  (prepare-ack [this id ack-fn]
-    (swap! ack-state
-           (fn [s] 
-             (if (s id)
-               ;; This shouldn't ever happen :/. Maybe we should overwrite here
-               s
-               (assoc s id (list ack-fn)))))
-    this)
-
-  (defer-filtered-ack [this id ack-fn ack-deferred-fn]
-    (let [[old-val new-val] (swap-pair! ack-state 
-                                        (fn [s]
-                                          (if (s id)
-                                            (update s id conj ack-fn)
-                                            s)))]
-      (when-not (= old-val new-val)
-        (ack-deferred-fn)) 
-      this))
-
-  (flush-acks [this id]
-    (let [[old-val new-val] (swap-pair! ack-state (fn [s] (dissoc s id)))]
-      (when-not (= old-val new-val)
-        (run! (fn [f] 
-                (f)) 
-              (old-val id))) 
-      this)))
 
 (defrecord WindowState [filter state changelogs])
 
@@ -180,7 +132,7 @@
     (when-let [site (peer-site peer-replica-view acker-id)]
       (emit-latency :peer-ack-segments
                     monitoring
-                    #(extensions/internal-ack-segments messenger event site acks))))
+                    #(extensions/internal-ack-segments messenger site acks))))
   event)
 
 (defn flow-retry-segments [{:keys [peer-replica-view state messenger monitoring] :as compiled} {:keys [onyx.core/results] :as event}]
@@ -188,7 +140,7 @@
     (when-let [site (peer-site peer-replica-view (:completion-id root))]
       (emit-latency :peer-retry-segment
                     monitoring
-                    #(extensions/internal-retry-segment messenger event (:id root) site))))
+                    #(extensions/internal-retry-segment messenger (:id root) site))))
   event)
 
 (defn gen-lifecycle-id [event]
@@ -322,46 +274,35 @@
                   onyx.core/triggers onyx.core/windows onyx.core/task-map onyx.core/window-state 
                   onyx.core/acking-state onyx.core/state-log onyx.core/results]} event
           grouping-fn (:grouping-fn compiled)
+          acker (:acking-state compiled)
           uniqueness-check? (contains? task-map :onyx/uniqueness-key)
           id-key (:onyx/uniqueness-key task-map)] 
       (doall
         (map 
           (fn [leaf fused-ack]
-            (let [start-time (System/currentTimeMillis)
-                  ;; Message should only be acked when all log updates have been written
-                  ;; As we filter out messages seen before, some replay can be accepted
-                  ack-fn (fn [] 
-                           (when (dec-count! fused-ack)
-                             (when-let [site (peer-site peer-replica-view (:completion-id fused-ack))]
-                               (extensions/internal-ack-segment messenger event site fused-ack)))
-                           (emit-latency-value :window-log-write-entry monitoring (- (System/currentTimeMillis) start-time)))]
-              ;; TODO, remove all special cases here with alternative implementation for filtered and non-filtered
               (run! 
                 (fn [message]
                   (let [segment (:message message)
-                        unique-id (if uniqueness-check? (get segment id-key))
-                        ;; Create two acking protocols, decide on them based on uniqueness-check? in task-map at task-start
-                        ack-buffer-fn (if uniqueness-check? (fn [] (prepare-ack acking-state unique-id ack-fn)) (fn []))
-                        ack-flush-fn (if uniqueness-check? (fn [] (flush-acks acking-state unique-id)) ack-fn)
-                        ack-deferred-fn (if uniqueness-check? 
-                                          (fn [] (defer-filtered-ack acking-state unique-id ack-fn (fn [] (inc-count! fused-ack)))) 
-                                          (fn []))]
+                        unique-id (if uniqueness-check? (get segment id-key))]
                     ;; don't use unique-id as the id may be nil
                     (if-not (and uniqueness-check? (state-extensions/filter? (:filter @window-state) event unique-id))
-                      (let [_ (inc-count! fused-ack)
-                            _ (ack-buffer-fn)
+                      (let [_ (st-ack/prepare acker unique-id fused-ack)
                             initial-entry [unique-id]
                             [new-window-state log-entry] (windows-state-updates segment grouping-fn windows (list (:state @window-state) initial-entry))
                             changes (add-to-changelogs (:changelogs @window-state) windows triggers log-entry)
                             notification {:segment segment :context :new-segment}
-                            [new-window-state log-entry changes*] (triggers-state-updates event triggers notification new-window-state log-entry changes)] 
+                            [new-window-state log-entry changes*] (triggers-state-updates event triggers notification new-window-state log-entry changes)
+                            start-time (System/currentTimeMillis)
+                            success-fn (fn [] 
+                                         (st-ack/ack acker unique-id fused-ack)
+                                         (emit-latency-value :window-log-write-entry monitoring (- (System/currentTimeMillis) start-time)))] 
                         (swap! window-state assoc :state new-window-state :changelogs changes*)
-                        (state-extensions/store-log-entry state-log event ack-flush-fn log-entry))
-                      (ack-deferred-fn))
+                        (state-extensions/store-log-entry state-log event success-fn log-entry))
+                      (st-ack/defer acker unique-id fused-ack))
                     ;; Always update the filter, to freshen up the fact that the id has been re-seen
                     (when uniqueness-check? 
                       (swap! window-state update :filter state-extensions/apply-filter-id event unique-id))))
-                (:leaves leaf))))
+                (:leaves leaf)))
           (:tree results)
           (:acks results)))))
   event)
@@ -399,7 +340,7 @@
                      (when site 
                        (emit-latency :peer-complete-segment
                                      monitoring
-                                     #(extensions/internal-complete-segment messenger event id site))))
+                                     #(extensions/internal-complete-segment messenger id site))))
 
                    (= ch retry-ch)
                    (->> (p-ext/retry-segment pipeline event v)
@@ -509,13 +450,13 @@
 
 (defn resolve-window-state [{:keys [onyx.core/peer-opts] :as pipeline}]
   (let [filter-impl (arg-or-default :onyx.peer/state-filter-impl peer-opts)] 
-    (-> pipeline
-      (assoc :onyx.core/acking-state (->AckingState (atom {})))
-      (assoc :onyx.core/window-state (if (windowed-task? pipeline)
-                                       (atom (->WindowState (if (exactly-once-task? pipeline) 
-                                                              (state-extensions/initialize-filter filter-impl pipeline)) 
-                                                            {}
-                                                            {})))))))
+    (assoc pipeline 
+           :onyx.core/window-state 
+           (if (windowed-task? pipeline)
+             (atom (->WindowState (if (exactly-once-task? pipeline) 
+                                    (state-extensions/initialize-filter filter-impl pipeline)) 
+                                  {}
+                                  {}))))))
 
 (defrecord TaskInformation 
   [id log job-id task-id 

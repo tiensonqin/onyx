@@ -6,6 +6,7 @@
             [onyx.lifecycles.lifecycle-compile :as lc]
             [onyx.peer.grouping :as g]
             [onyx.static.uuid :refer [random-uuid]]
+            [onyx.state.ack :as state-ack]
             [onyx.triggers.refinements]
             [onyx.windowing.window-compile :as wc]))
 
@@ -52,6 +53,7 @@
                 (assoc :pipeline pipeline)
                 (assoc :messenger messenger)
                 (assoc :monitoring monitoring)
+                (assoc :acking-state (state-ack/new-ack-state task-map peer-replica-view messenger))
                 (assoc :job-id job-id)
                 (assoc :id id)
                 (assoc :state state)
