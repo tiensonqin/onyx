@@ -6,15 +6,19 @@
             [onyx.peer.operation :as operation]
             [onyx.extensions :as extensions]
             [clj-tuple :as t]
+            [onyx.static.default-vals :refer [defaults arg-or-default]]
             [onyx.log.commands.peer-replica-view :refer [peer-site]]
             [taoensso.timbre :as timbre :refer [debug info]])
   (:import [java.util UUID]))
 
 (defn read-batch
-  ([event]
-   (read-batch event (:onyx.core/messenger event)))
-  ([event messenger]
-   {:onyx.core/batch (onyx.extensions/receive-messages messenger event)}))
+  ([{:keys [onyx.core/task-map onyx.core/messenger] :as event}]
+   (read-batch event 
+               messenger
+               (:onyx/batch-size task-map) 
+               (arg-or-default :onyx/batch-timeout task-map)))
+  ([event messenger batch-size batch-timeout]
+   {:onyx.core/batch (onyx.extensions/receive-messages messenger event batch-size batch-timeout)}))
 
 (defn write-batch
   ([{:keys [onyx.core/messenger onyx.core/state
@@ -33,14 +37,14 @@
                grouped))))
    {}))
 
-(defrecord Function [peer-replica-view state messenger egress-tasks]
+(defrecord Function [peer-replica-view state messenger egress-tasks batch-size batch-timeout]
 
   p-ext/PipelineInput
   p-ext/Pipeline
   
   (read-batch
     [_ event]
-    (read-batch event messenger))
+    (read-batch event messenger batch-size batch-timeout))
 
   (write-batch
     [_ event]
@@ -52,8 +56,11 @@
 (defn function [{:keys [onyx.core/peer-replica-view
                         onyx.core/state
                         onyx.core/messenger
+                        onyx.core/task-map
                         onyx.core/serialized-task] :as pipeline-data}]
   (->Function peer-replica-view
               state
               messenger
-              (:egress-ids serialized-task)))
+              (:egress-ids serialized-task)
+              (:onyx/batch-size task-map)
+              (arg-or-default :onyx/batch-timeout task-map)))

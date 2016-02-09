@@ -1,5 +1,5 @@
 (ns ^:no-doc onyx.messaging.aeron
-  (:require [clojure.core.async :refer [chan >!! <!! alts!! timeout close! sliding-buffer]]
+  (:require [clojure.core.async :refer [chan >!! <!! alts!! poll! timeout close! sliding-buffer]]
             [com.stuartsierra.component :as component]
             [taoensso.timbre :refer [fatal info] :as timbre]
             [onyx.messaging.aeron.peer-manager :as pm]
@@ -24,7 +24,7 @@
   (format "udp://%s:%s" addr port))
 
 (defrecord AeronMessenger
-  [peer-group messaging-group publication-group short-circuitable? publications virtual-peers 
+  [peer-group messenger messaging-group publication-group short-circuitable? publications virtual-peers 
    acking-daemon send-idle-strategy compress-f monitoring publication-pool short-ids acking-ch]
   component/Lifecycle
 
@@ -316,22 +316,22 @@
     (->AeronPeerConnection (aeron-channel external-addr port) stream-id acker-id peer-task-id)))
 
 (defmethod extensions/receive-messages AeronMessenger
-  [messenger {:keys [onyx.core/task-map onyx.core/messenger-buffer] :as event}]
-  ;; We reuse a single timeout channel. This allows us to
-  ;; continually block against one thread that is continually
-  ;; expiring. This property lets us take variable amounts of
-  ;; time when reading each segment and still allows us to return
-  ;; within the predefined batch timeout limit.
-  (let [ch (:inbound-ch messenger-buffer)
-        batch-size (long (:onyx/batch-size task-map))
-        ms (arg-or-default :onyx/batch-timeout task-map)
-        timeout-ch (timeout ms)]
-    (loop [segments (transient []) i 0]
-      (if (< i batch-size)
-        (if-let [v (first (alts!! [ch timeout-ch]))]
-          (recur (conj! segments v) (inc i))
-          (persistent! segments))
-        (persistent! segments)))))
+  [messenger {:keys [onyx.core/messenger-buffer] :as event} batch-size batch-timeout]
+  (loop [] 
+    (let [ch (:inbound-ch messenger-buffer)
+          segments (loop [segments (transient []) i 0]
+                     (if (< i batch-size)
+                       (if-let [v (poll! ch)]
+                         (recur (conj! segments v) (inc i))
+                         (persistent! segments))
+                       (persistent! segments)))]
+      (if-not (empty? segments)
+        segments
+        (if (first (alts!! ((juxt :onyx.core/task-kill-ch :onyx.core/kill-ch) event) :default true)) 
+          (do
+            (Thread/sleep batch-timeout)
+            (recur))
+          segments)))))
 
 (defn lookup-channels [messenger id]
   (-> messenger

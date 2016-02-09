@@ -63,7 +63,7 @@
 
 (defmulti connection-spec (fn [messenger peer-id event peer-site] (type messenger)))
 
-(defmulti receive-messages (fn [messenger event] (type messenger)))
+(defmulti receive-messages (fn [messenger event batch-size batch-timeout] (type messenger)))
 
 (defmulti send-messages (fn [messenger event peer-link messages] (type messenger)))
 
