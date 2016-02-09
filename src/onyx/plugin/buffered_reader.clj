@@ -1,6 +1,6 @@
 (ns onyx.plugin.buffered-reader
   (:require [clojure.core.async :refer [chan >! >!! <!! close! thread timeout alts!! go-loop sliding-buffer]]
-            [onyx.plugin.simple-input :refer [checkpoint-ack! checkpoint checkpoint-segment! next-segment! recover! stop]]
+            [onyx.plugin.simple-input :refer [checkpoint-ack! checkpoint checkpoint-segment! next-segment! recover! segment-complete! stop]]
             [onyx.peer.pipeline-extensions :as p-ext]
             [onyx.peer.function :as function]
             [onyx.types :as t]
@@ -55,8 +55,10 @@
 
   p-ext/PipelineInput
   (ack-segment [_ event segment-id]
-    (checkpoint-ack! reader (:checkpoint (get @pending-messages segment-id)))
-    (swap! pending-messages dissoc segment-id))
+    (let [input (get @pending-messages segment-id)] 
+      (checkpoint-ack! reader (:checkpoint input))
+      (segment-complete! reader (:message input))
+      (swap! pending-messages dissoc segment-id)))
 
   (retry-segment
     [_ event segment-id]
@@ -87,13 +89,12 @@
             commit-loop-ch (start-commit-loop! reader shutdown-ch commit-ms log task-id)
             producer-ch (thread
                           (try
-                            (loop [{:keys [value checkpoint]} (next-segment! reader (:chunk-index content))
-                                   current-state (:chunk-index content)]
-                              (checkpoint-segment! reader checkpoint)
+                            (loop [{:keys [value offset]} (next-segment! reader (:chunk-index content))]
+                              (checkpoint-segment! reader offset)
                               (>!! read-ch (assoc (t/input (random-uuid) value) 
-                                                  :checkpoint current-state))
+                                                  :checkpoint offset))
                               (if-not (= :done value)
-                                (recur (next-segment! reader checkpoint) checkpoint)))
+                                (recur (next-segment! reader offset))))
                             (catch Exception e
                               ;; feedback exception to read-batch
                               (>!! read-ch e))))]
