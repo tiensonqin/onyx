@@ -53,7 +53,6 @@
                                   :changelog changelog})
         entry (state-update event trigger opts window-id-state)
         new-state (apply-state-update event trigger window-id-state entry)
-        opts (merge opts {:refinement {:entry entry
-                                       :new-state new-state}})]
-    (sync-fn event window trigger opts new-state)
+        opts (assoc opts :refinement entry)]
+    (sync-fn event window trigger opts window-id-state new-state)
     (list new-state entry)))
