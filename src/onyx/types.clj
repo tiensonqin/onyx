@@ -2,10 +2,13 @@
 
 (defrecord Event [monitoring metrics])
 
-(defrecord Leaf [message id acker-id completion-id ack-val hash-group route])
+(defrecord Leaf [message id offset acker-id completion-id ack-val hash-group route])
 
-(defn input [id message]
-  (->Leaf message id nil nil nil nil nil))
+(defn input 
+  ([id message offset]
+   (->Leaf message id offset nil nil nil nil nil))
+  ([id message]
+   (->Leaf message id nil nil nil nil nil)))
 
 (defrecord Route [flow exclusions post-transformation action])
 

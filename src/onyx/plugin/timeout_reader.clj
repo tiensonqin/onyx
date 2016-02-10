@@ -1,6 +1,6 @@
 (ns onyx.plugin.timeout-reader
   (:require [clojure.core.async :refer [chan >! >!! <!! close! thread timeout alts!! go-loop sliding-buffer]]
-            [onyx.plugin.simple-input :refer [checkpoint-ack! checkpoint next-segment! recover! segment-complete! stop]]
+            [onyx.plugin.simple-input :as i]
             [onyx.static.swap-pair :refer [swap-pair!]]
             [onyx.peer.pipeline-extensions :as p-ext]
             [onyx.peer.function :as function]
@@ -16,7 +16,7 @@
            (let [timeout-ch (timeout commit-ms)] 
              (when-let [[_ ch] (alts!! [shutdown-ch timeout-ch] :priority true)]
                (when (= ch timeout-ch)
-                 (extensions/force-write-chunk log :chunk (checkpoint reader) k)
+                 (extensions/force-write-chunk log :chunk (i/checkpoint @reader) k)
                  (recur))))))
 
 (defn all-done? [messages]
@@ -43,15 +43,23 @@
           timeout-ch (timeout batch-timeout)
           [old-buffer new-buffer] (swap-pair! retry-buffer (fn [v] (drop max-segments v)))
           retry-batch (transient (vec (take max-segments old-buffer)))
-          batch (if (= max-segments (count retry-batch))
-                  (persistent! retry-batch)
-                  (loop [batch retry-batch 
-                         {:keys [segment offset]} (next-segment! reader)]
-                    (let [new-input (assoc (t/input (random-uuid) segment) :checkpoint offset)
-                          new-batch (conj! batch new-input)]
-                      (if-not (and (= :done segment) (< (count batch) max-segments))
-                        (recur new-batch (next-segment! reader))
-                        (persistent! new-batch)))))]
+          [new-reader batch] 
+          (if (= max-segments (count retry-batch))
+            (persistent! retry-batch)
+            (loop [batch retry-batch 
+                   reader (i/next-state @reader)
+                   segment (i/segment reader)
+                   offset (i/offset reader)]
+              (let [new-input (t/input (random-uuid) segment offset)
+                    new-batch (conj! batch new-input)]
+                (if-not (and (= :done segment) (< (count batch) max-segments))
+                  (let [new-reader (i/next-state reader)] 
+                    (recur new-batch 
+                           new-reader
+                           (i/segment new-reader)
+                           (i/offset new-reader)))
+                  (list reader (persistent! new-batch))))))]
+      (reset! reader new-reader)
       (when (empty? batch)
         (Thread/sleep 500))
       (doseq [m batch]
@@ -64,9 +72,9 @@
   p-ext/PipelineInput
   (ack-segment [_ event segment-id]
     (let [input (get @pending-messages segment-id)] 
-      (checkpoint-ack! reader (:checkpoint input))
-      (segment-complete! reader (:message input))
-      (swap! pending-messages dissoc segment-id)))
+      (swap! reader i/checkpoint-ack (:offset input))
+      (swap! pending-messages dissoc segment-id)
+      (i/segment-complete! @reader (:message input))))
 
   (retry-segment
     [_ event segment-id]
@@ -88,7 +96,7 @@
         batch-timeout (arg-or-default :onyx/batch-timeout task-map)
         reader-builder (kw->fn (:simple-input/build-input task-map))
         reader (onyx.plugin.simple-input/start (reader-builder event))]
-    (->TimeoutInput reader log task-id max-pending batch-size batch-timeout (atom {}) (atom false) (atom []))))
+    (->TimeoutInput (atom reader) log task-id max-pending batch-size batch-timeout (atom {}) (atom false) (atom []))))
 
 (defn inject-timeout-reader
   [{:keys [onyx.core/task-map onyx.core/log onyx.core/task-id onyx.core/pipeline] :as event} 
@@ -96,12 +104,12 @@
   (let [shutdown-ch (chan 1)
         {:keys [reader read-ch]} pipeline
         ;; Attempt to write initial checkpoint
-        _ (extensions/write-chunk log :chunk (checkpoint reader) task-id)
+        _ (extensions/write-chunk log :chunk (i/checkpoint @reader) task-id)
         read-offset (extensions/read-chunk log :chunk task-id)]
+    (swap! reader i/recover read-offset)
     (if (= :complete read-offset)
       (throw (Exception. "Restarted task and it was already complete. This is currently unhandled."))
       (let [commit-ms 500
-            _ (recover! reader read-offset)
             commit-loop-ch (start-commit-loop! reader shutdown-ch commit-ms log task-id)]
         {:timeout-reader/reader reader
          :timeout-reader/shutdown-ch shutdown-ch}))))
@@ -110,5 +118,5 @@
   [{:keys [timeout-reader/reader timeout-reader/shutdown-ch] :as event} 
    lifecycle]
   (close! shutdown-ch)
-  (stop reader)
+  (i/stop @reader)
   {})
