@@ -8,7 +8,7 @@
   ([id message offset]
    (->Leaf message id offset nil nil nil nil nil))
   ([id message]
-   (->Leaf message id nil nil nil nil nil)))
+   (->Leaf message id nil nil nil nil nil nil)))
 
 (defrecord Route [flow exclusions post-transformation action])
 
