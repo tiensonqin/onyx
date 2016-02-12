@@ -3,6 +3,9 @@
   Note, this will break any plugins that manually manage the ack count, such as
   plugins using async callbacks.
 
+#### 0.8.10
+- Bug fix: fix peer join issue which occurs when cluster is in a stuck state, and dead peers need to be evicted.
+
 #### 0.8.9
 
 - **Breaking change**: Removed `:onyx/restart-pred-fn` feature, which has been deprecated in favor of the new `:lifecycle/handle-exception` feature.
