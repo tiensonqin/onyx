@@ -37,7 +37,7 @@
        (assoc window
               :aggregate/record (w/windowing-record window)
               :aggregate/init (resolve-window-init window calls)
-              :aggregate/fn (:aggregation/fn calls)
+              :aggregate/create-state-update (:aggregation/create-state-update calls)
               :aggregate/super-agg-fn (:aggregation/super-aggregation-fn calls)
               :aggregate/apply-state-update (:aggregation/apply-state-update calls))))
    windows))
@@ -65,8 +65,8 @@
                       (update-in state* 
                                  [:state id extent]
                                  (fn [ext-state] 
-                                   (let [state-value (a/default-state-value (get-state-fn ext-state grp-key) window)
-                                         new-state-value (apply-state-update state-value extent-entry)] 
+                                   (let [state-value (a/default-state-value window (get-state-fn ext-state grp-key))
+                                         new-state-value (apply-state-update window state-value extent-entry)] 
                                      (set-state-fn ext-state grp-key new-state-value))))))
                   state
                   window-entries))

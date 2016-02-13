@@ -380,15 +380,15 @@
                                :type :function
                                :optional? true
                                :added "0.8.0"}
-            :aggregation/fn {:doc "Fn (state, window, segment) to generate a serializable state machine update."
-                             :type :function
-                             :optional? false
-                             :added "0.8.0"}
-            :aggregation/apply-state-update {:doc "Fn (state, entry) to apply state machine update entry to a state."
+            :aggregation/create-state-update {:doc "Fn (window, state, segment) to generate a serializable state machine update."
+                                              :type :function
+                                              :optional? false
+                                              :added "0.8.0"}
+            :aggregation/apply-state-update {:doc "Fn (window, state, entry) to apply state machine update entry to a state."
                                              :type :function
                                              :optional? false
                                              :added "0.8.0"}
-            :aggregation/super-aggregation-fn {:doc "Fn (state-1, state-2, window) to combine two states in the case of two windows being merged, e.g. session windows."
+            :aggregation/super-aggregation-fn {:doc "Fn (window, state-1, state-2) to combine two states in the case of two windows being merged, e.g. session windows."
                                                :type :function
                                                :optional? true
                                                :added "0.8.0"}}}
@@ -422,14 +422,17 @@
              :default true}
 
             :trigger/sync
-            {:doc "A fully qualified, namespaced keyword pointing to a function on the classpath at runtime. This function takes 5 arguments: the event map, the window map that this trigger is defined on, the trigger map, a map with keys (`:window-id`, `:lower-bound`, `:upper-bound`, `:context`) representing window metadata, and the window state as an immutable value. Its return value is ignored. The window metadata keys represent the following:
+            {:doc "A fully qualified, namespaced keyword pointing to a function on the classpath at runtime. This function takes 5 arguments: the event map, the window map that this trigger is defined on, the trigger map, the window state as an immutable value, and an opts map with keys (`:window/extent->bounds`, `:aggregation/changelog`, `:refinement/entry`, `:refinement/new-state`, `:context`). Its return value is ignored. 
 
-                  - `:window-id`: a unique ID representing this concrete instance of a window. The ID is only unique among windows for a particular `:window/id` in the Onyx job.
-                  - `:lower-bound` - The lowermost value of any window key for a segment that belongs to this window
-                  - `:upper-bound` - The uppermost value of any window key for a segment that belongs to this window
+                  The window metadata keys represent the following:
+
+                  - `:window/extent->bounds`: a function that maps the extent keys of the window-state to their window bounds i.e. [lower-bound, upper-bound]. Lower bound is the lower most value of any window key for a segment that belongs to this window. Upper bound is the uppermost value of any window key for a segment that belongs to this window.
+                  - `:aggregation/changelog` - A changelog list of aggegation state updates since the last time the trigger was fired.
+                  - `:refinement/entry` - the refinement state update that transitions from state to new-state.
+                  - `:refinement/new-state` - the window-state after the application of the refinement entry to the state.
                   - `:context` - a keyword representing the context that caused this trigger to fire
 
-                  This function is invoked when the trigger fires, and is used to do any arbitrary action with the window contents, such as sync them to a database. It is called once *per window instance*. In other words, if a fixed window exists with 5 instances, the firing of a Timer trigger will call the sync function 5 times.
+                  This function is invoked when the trigger fires, and is used to do any arbitrary action with the window contents, such as sync them to a database. It is called once for each trigger.
 
                   You can use lifecycles to supply any stateful connections necessary to sync your data. Supplied values from lifecycles will be available through the first parameter - the event map."
              :type :keyword
@@ -1145,7 +1148,8 @@
     :window/min-key :window/session-key :window/range :window/slide
     :window/init :window/timeout-gap :window/doc]
    :state-aggregation
-   [:aggregation/init :aggregation/fn :aggregation/apply-state-update :aggregation/super-aggregation-fn] 
+   [:aggregation/init :aggregation/create-state-update 
+    :aggregation/apply-state-update :aggregation/super-aggregation-fn] 
    :trigger-entry
    [:trigger/window-id :trigger/refinement :trigger/on :trigger/sync :trigger/changelog?
     :trigger/period :trigger/threshold :trigger/pred :trigger/watermark-percentage :trigger/fire-all-extents?

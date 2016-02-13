@@ -301,9 +301,13 @@
 
 (def StateAggregationCall
   {(s/optional-key :aggregation/init) Function
-   :aggregation/fn Function
+   :aggregation/create-state-update Function
    :aggregation/apply-state-update Function
    (s/optional-key :aggregation/super-aggregation-fn) Function})
+
+(def RefinementCall
+  {:refinement/create-state-update Function
+   :refinement/apply-state-update Function})
 
 (def JobScheduler
   NamespacedKeyword)

@@ -6,7 +6,7 @@
             [onyx.windowing.units :as u]
             [onyx.information-model :refer [model]]
             [onyx.schema :refer [TaskMap Catalog Workflow Job LifecycleCall StateAggregationCall
-                                 Lifecycle EnvConfig PeerConfig FlowCondition]]))
+                                 RefinementCall Lifecycle EnvConfig PeerConfig FlowCondition]]))
 
 (defn validate-java-version []
   (let [version (System/getProperty "java.runtime.version")] 
@@ -159,6 +159,9 @@
 
 (defn validate-state-aggregation-calls [m]
   (schema/validate StateAggregationCall m))
+
+(defn validate-refinement-calls [m]
+  (schema/validate RefinementCall m))
 
 (defn validate-env-config [env-config]
   (schema/validate EnvConfig env-config))

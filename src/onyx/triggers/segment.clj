@@ -4,7 +4,7 @@
             [onyx.triggers.triggers-api :as api]
             [onyx.peer.operation :refer [kw->fn]]
             [onyx.static.planning :refer [find-window]]
-            [taoensso.timbre :refer [fatal]]))
+            [taoensso.timbre :refer [fatal info]]))
 
 (defmethod api/trigger-setup :segment
   [event trigger]
@@ -17,7 +17,7 @@
   #{:new-segment :task-lifecycle-stopped})
 
 (defmethod api/trigger-fire? :segment
-  [{:keys [onyx.core/window-state] :as event} trigger {:keys [segment]}]
+  [{:keys [onyx.core/window-state] :as event} trigger opts]
   (let [id (:trigger/id trigger)
         segment-state @(:onyx.triggers/segments event)
         x ((fnil inc 0) (get segment-state id))

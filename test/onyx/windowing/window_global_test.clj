@@ -26,7 +26,7 @@
 
 (def test-state (atom []))
 
-(defn update-atom! [event window trigger {:keys [window extent->bounds changelog refinement-entry] :as opts} state]
+(defn update-atom! [event window trigger {:keys [window/extent->bounds] :as opts} state]
   (doall 
     (map (fn [[extent extent-state] [lower-bound upper-bound]] 
            (swap! test-state conj [lower-bound

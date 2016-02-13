@@ -44,15 +44,17 @@
 (defn fire-trigger! 
   [{:keys [onyx.core/windows] :as event} 
    window-id-state 
-   {:keys [trigger/window-id trigger/sync-fn refinement/state-update refinement/apply-state-update] :as trigger}
-   notification 
+   {:keys [trigger/window-id trigger/sync-fn 
+           refinement/create-state-update refinement/apply-state-update]
+    :as trigger}
+   opts 
    changelog]
   (let [window (find-window windows window-id)
         extent->bounds #(we/bounds (:aggregate/record window) %)
-        opts (merge notification {:window/extent->bounds extent->bounds
-                                  :aggregation/changelog changelog})
-        entry (state-update event trigger opts window-id-state)
-        new-state (apply-state-update event trigger window-id-state entry)
+        opts (merge opts {:window/extent->bounds extent->bounds
+                          :aggregation/changelog changelog})
+        entry (create-state-update trigger opts window-id-state)
+        new-state (apply-state-update trigger opts window-id-state entry)
         opts (merge opts {:refinement/entry entry
                           :refinement/new-state new-state})]
     (sync-fn event window trigger opts window-id-state)

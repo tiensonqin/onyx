@@ -216,10 +216,10 @@
     (let [record (:aggregate/record w)]
       (reduce (fn [[wst entries] extent]
                 (let [extent-state (get wst extent)
-                      state-value (-> (if grouping-fn (get extent-state grp-key) extent-state)
-                                      (agg/default-state-value w))
-                      state-transition-entry ((:aggregate/fn w) state-value w segment)
-                      new-state-value ((:aggregate/apply-state-update w) state-value state-transition-entry)
+                      state-value (->> (if grouping-fn (get extent-state grp-key) extent-state)
+                                       (agg/default-state-value w))
+                      state-transition-entry ((:aggregate/create-state-update w) w state-value segment)
+                      new-state-value ((:aggregate/apply-state-update w) w state-value state-transition-entry)
                       new-state (if grouping-fn
                                   (assoc extent-state grp-key new-state-value)
                                   new-state-value)
@@ -290,7 +290,7 @@
                             initial-entry [unique-id]
                             [new-window-state log-entry] (windows-state-updates segment grouping-fn windows (list (:state @window-state) initial-entry))
                             changes (add-to-changelogs (:changelogs @window-state) windows triggers log-entry)
-                            notification {:segment segment :context :new-segment}
+                            notification {:context :new-segment}
                             [new-window-state log-entry changes*] (triggers-state-updates event triggers notification new-window-state log-entry changes)
                             start-time (System/currentTimeMillis)
                             success-fn (fn [] 

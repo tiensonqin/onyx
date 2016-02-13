@@ -7,6 +7,7 @@
             [onyx.peer.grouping :as g]
             [onyx.static.uuid :refer [random-uuid]]
             [onyx.state.ack :as state-ack]
+            [onyx.static.validation :as validation]
             [onyx.triggers.refinements]
             [onyx.windowing.window-compile :as wc]))
 
@@ -19,6 +20,7 @@
   (map
     (fn [{:keys [trigger/sync trigger/refinement trigger/changelog?] :as trigger}] 
       (let [refinement-calls (var-get (kw->fn refinement))] 
+        (validation/validate-refinement-calls refinement-calls)
         (merge trigger 
                refinement-calls
                {:trigger/changelog? (if (nil? changelog?) true changelog?)
