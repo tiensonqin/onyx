@@ -64,7 +64,7 @@
 
   (extents [this all-extents segment]
     (let [w-range (apply units/to-standard-units range)
-          w-slide (apply units/to-standard-units range)]
+          w-slide (apply units/to-standard-units slide)]
       (window-id-impl-extents range min-value window-key w-range w-slide segment)))
 
   (merge-extents [this extents super-agg-fn segment]
