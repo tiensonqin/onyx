@@ -3,7 +3,6 @@
             [onyx.windowing.window-id :as wid]
             [onyx.triggers.triggers-api :as api]
             [onyx.peer.operation :refer [kw->fn]]
-            [onyx.static.planning :refer [find-window]]
             [taoensso.timbre :refer [fatal]]))
 
 (defmethod api/trigger-setup :punctuation

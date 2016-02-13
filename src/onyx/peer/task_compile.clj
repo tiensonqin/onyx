@@ -1,6 +1,8 @@
 (ns ^:no-doc onyx.peer.task-compile
   (:require [clojure.set :refer [subset?]]
             [taoensso.timbre :refer [info error warn trace fatal] :as timbre]
+            [schema.core :as s]
+            [onyx.schema :refer [Trigger Window InternalTrigger InternalWindow Event]]
             [onyx.peer.operation :refer [kw->fn]]
             [onyx.flow-conditions.fc-compile :as fc]
             [onyx.lifecycles.lifecycle-compile :as lc]
@@ -11,32 +13,19 @@
             [onyx.triggers.refinements]
             [onyx.windowing.window-compile :as wc]))
 
-(defn filter-triggers [triggers windows]
-  (filter #(some #{(:trigger/window-id %)}
-                 (map :window/id windows))
-          triggers))
-
-(defn resolve-triggers [triggers]
-  (map
-    (fn [{:keys [trigger/sync trigger/refinement trigger/changelog?] :as trigger}] 
-      (let [refinement-calls (var-get (kw->fn refinement))] 
-        (validation/validate-refinement-calls refinement-calls)
-        (merge trigger 
-               refinement-calls
-               {:trigger/changelog? (if (nil? changelog?) true changelog?)
-                :trigger/id (random-uuid)
-                :trigger/sync-fn (kw->fn sync)})))
-   triggers))
-
-(defn resolve-window-triggers [triggers windows event]
-  (merge
-   event
-   {:onyx.core/triggers (resolve-triggers (filter-triggers triggers windows))}))
-
 (defn windows->event-map [windows event]
   (assoc event :onyx.core/windows (wc/resolve-windows windows)))
 
-(defn flow-conditions->event-map [{:keys [onyx.core/flow-conditions onyx.core/workflow onyx.core/task] :as event}]
+(s/defn filter-triggers [triggers :- [Trigger] windows :- [InternalWindow]]
+  (filter #(some #{(:trigger/window-id %)}
+                 (map :id windows))
+          triggers))
+
+(defn triggers->event-map [triggers {:keys [onyx.core/windows] :as event}]
+  (assoc event :onyx.core/triggers (wc/resolve-triggers (filter-triggers triggers windows) windows)))
+
+(s/defn flow-conditions->event-map 
+  [{:keys [onyx.core/flow-conditions onyx.core/workflow onyx.core/task] :as event} :- Event]
   (update event 
           :onyx.core/compiled 
           (fn [compiled] 

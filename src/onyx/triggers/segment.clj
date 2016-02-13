@@ -3,21 +3,25 @@
             [onyx.windowing.window-id :as wid]
             [onyx.triggers.triggers-api :as api]
             [onyx.peer.operation :refer [kw->fn]]
-            [onyx.static.planning :refer [find-window]]
+            [onyx.schema :refer [InternalTrigger Trigger Window Event]]
+            [schema.core :as s]
             [taoensso.timbre :refer [fatal info]]))
 
-(defmethod api/trigger-setup :segment
-  [event trigger]
+(s/defmethod api/trigger-setup :segment
+  [event trigger :- Trigger]
   (if (= (standard-units-for (second (:trigger/threshold trigger))) :elements)
     (assoc-in event [:onyx.triggers/segments] (atom {}))
     (throw (ex-info ":trigger/threshold must be a unit that can be converted to :elements" {:trigger trigger}))))
 
-(defmethod api/trigger-notifications :segment
-  [event trigger]
+(s/defmethod api/trigger-notifications :segment
+  [event :- Event
+   trigger :- Trigger]
   #{:new-segment :task-lifecycle-stopped})
 
-(defmethod api/trigger-fire? :segment
-  [{:keys [onyx.core/window-state] :as event} trigger opts]
+(s/defmethod api/trigger-fire? :segment
+  [{:keys [onyx.core/window-state] :as event} :- Event
+   trigger :- Trigger
+   opts]
   (let [id (:trigger/id trigger)
         segment-state @(:onyx.triggers/segments event)
         x ((fnil inc 0) (get segment-state id))
@@ -27,6 +31,6 @@
       (swap! (:onyx.triggers/segments event) update id (fnil inc 0)))
     fire?))
 
-(defmethod api/trigger-teardown :segment
-  [event trigger]
+(s/defmethod api/trigger-teardown :segment
+  [event :- Event trigger :- Trigger]
   (dissoc event :onyx.triggers/segments))

@@ -33,6 +33,10 @@
                      egress-ids flow-conditions fn grouping-fn id job-id messenger monitoring 
                      peer-replica-view pipeline state task->group-by-fn task-type acking-state])
 
+(defrecord InternalTrigger 
+  [window-id internal-window refinement on sync fire-all-extents? changelog? 
+   pred watermark-percentage doc period threshold sync-fn id refinement-calls])
+
 (defrecord Link [link timestamp])
 
 (defrecord MonitorEvent [event])

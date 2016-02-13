@@ -1,9 +1,12 @@
 (ns onyx.windowing.aggregation
-  (:require [taoensso.timbre :refer [info error warn trace fatal] :as timbre])
+  (:require [taoensso.timbre :refer [info error warn trace fatal] :as timbre]
+            [onyx.schema :refer [InternalWindow Window Event]]
+            [schema.core :as s])
   (:refer-clojure :exclude [min max count conj]))
 
-(defn default-state-value [window state-value]
-  (or state-value ((:aggregate/init window) window)))
+(s/defn default-state-value 
+  [{:keys [window init-fn] :as iw} :- InternalWindow state-value]
+  (or state-value (init-fn window)))
 
 (defn set-value-aggregation-apply-log [window state v]
   ;; Log command is not needed for single transition type

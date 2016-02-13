@@ -329,7 +329,7 @@
                              "`:window/type` is set to `:session`"]
              :added "0.8.0"}
 
-            :window/min-key
+            :window/min-value
             {:doc "A globally minimum value that values of `:window/window-key` will never be less than. This is used for calculating materialized aggregates for windows in a space efficient manner."
              :type :integer
              :optional? true
@@ -477,6 +477,12 @@
             :trigger/doc
             {:doc "A docstring for this trigger."
              :type :string
+             :optional? true
+             :added "0.8.0"}
+            
+            :trigger/id
+            {:doc "An internal id that will be added to the trigger map for use within the trigger if none exists."
+             :type :any
              :optional? true
              :added "0.8.0"}}}
 
@@ -1145,7 +1151,7 @@
     :flow/thrown-exception?  :flow/post-transform :flow/action :flow/doc]
    :window-entry
    [:window/id :window/task :window/type :window/aggregation :window/window-key
-    :window/min-key :window/session-key :window/range :window/slide
+    :window/min-value :window/session-key :window/range :window/slide
     :window/init :window/timeout-gap :window/doc]
    :state-aggregation
    [:aggregation/init :aggregation/create-state-update 

@@ -2,6 +2,8 @@
     (:require [clojure.core.async :refer [alts!! <!! >!! <! >! timeout chan close! thread go]]
               [com.stuartsierra.component :as component]
               [taoensso.timbre :refer [info error warn trace fatal] :as timbre]
+              [onyx.schema :refer [InternalTrigger InternalWindow Window Event]]
+              [schema.core :as s]
               [onyx.static.rotating-seq :as rsc]
               [onyx.log.commands.common :as common]
               [onyx.log.entry :as entry]
@@ -17,7 +19,7 @@
               [onyx.windowing.window-compile :as wc]
               [onyx.windowing.window-extensions :as we]
               [onyx.windowing.aggregation :as agg]
-              [onyx.triggers.triggers-api :as triggers]
+              [onyx.triggers.triggers-api :as triggers :refer [fire-trigger! trigger-fire? trigger-notifications]]
               [onyx.triggers.refinements]
               [onyx.extensions :as extensions]
               [onyx.types :refer [->Ack ->Results ->MonitorEvent dec-count! inc-count! map->Event map->Compiled]]
@@ -33,11 +35,11 @@
 
 (defrecord WindowState [filter state changelogs])
 
-(defn windowed-task? [event]
+(s/defn windowed-task? [event :- Event]
   (or (not-empty (:onyx.core/windows event))
       (not-empty (:onyx.core/triggers event))))
 
-(defn start-lifecycle? [event]
+(s/defn start-lifecycle? [event :- Event]
   (let [rets (lc/invoke-start-task (:onyx.core/compiled event) event)]
     (when-not (:onyx.core/start-lifecycle? rets)
       (timbre/info (format "[%s] Peer chose not to start the task yet. Backing off and retrying..."
@@ -50,15 +52,15 @@
 (defn add-completion-id [id m]
   (assoc m :completion-id id))
 
-(defn sentinel-found? [event]
+(s/defn sentinel-found? [event :- Event]
   (seq (filter #(= :done (:message %))
                (:onyx.core/batch event))))
 
-(defn complete-job [{:keys [onyx.core/job-id onyx.core/task-id] :as event}]
+(s/defn complete-job [{:keys [onyx.core/job-id onyx.core/task-id] :as event} :- Event]
   (let [entry (entry/create-log-entry :exhaust-input {:job job-id :task task-id})]
     (>!! (:onyx.core/outbox-ch event) entry)))
 
-(defn sentinel-id [event]
+(s/defn sentinel-id [event :- Event]
   (:id (first (filter #(= :done (:message %))
                       (:onyx.core/batch event)))))
 
@@ -93,9 +95,9 @@
       (assoc accum :retries (conj! (:retries accum) root))
       (add-segments accum (:flow routes) hash-group leaf*))))
 
-(defn add-from-leaves
+(s/defn add-from-leaves
   "Flattens root/leaves into an xor'd ack-val, and accumulates new segments and retries"
-  [segments retries event result compiled]
+  [segments retries event :- Event result compiled]
   (let [root (:root result)
         leaves (:leaves result)
         start-ack-val (or (:ack-val root) 0)]
@@ -124,8 +126,9 @@
                         (:tree results))]
     (assoc event :onyx.core/results (persistent-results! results))))
 
-(defn ack-segments [{:keys [peer-replica-view task-map state messenger monitoring] :as compiled} 
-                    {:keys [onyx.core/results] :as event}]
+(s/defn ack-segments :- Event
+  [{:keys [peer-replica-view task-map state messenger monitoring] :as compiled} 
+   {:keys [onyx.core/results] :as event} :- Event]
   (doseq [[acker-id acks] (->> (:acks results)
                                (filter dec-count!)
                                (group-by :completion-id))]
@@ -135,7 +138,9 @@
                     #(extensions/internal-ack-segments messenger site acks))))
   event)
 
-(defn flow-retry-segments [{:keys [peer-replica-view state messenger monitoring] :as compiled} {:keys [onyx.core/results] :as event}]
+(s/defn flow-retry-segments :- Event
+  [{:keys [peer-replica-view state messenger monitoring] :as compiled} 
+   {:keys [onyx.core/results] :as event} :- Event]
   (doseq [root (:retries results)]
     (when-let [site (peer-site peer-replica-view (:completion-id root))]
       (emit-latency :peer-retry-segment
@@ -143,7 +148,8 @@
                     #(extensions/internal-retry-segment messenger (:id root) site))))
   event)
 
-(defn gen-lifecycle-id [event]
+(s/defn gen-lifecycle-id :- Event 
+  [event :- Event]
   (assoc event :onyx.core/lifecycle-id (uuid/random-uuid)))
 
 (defn handle-backoff! [event]
@@ -160,7 +166,8 @@
       (handle-backoff! event)
       rets)))
 
-(defn tag-messages [{:keys [peer-replica-view task-type id] :as compiled} event]
+(s/defn tag-messages :- Event
+  [{:keys [peer-replica-view task-type id] :as compiled} event :- Event]
   (if (= task-type :input)
     (update event
             :onyx.core/batch
@@ -171,13 +178,15 @@
                    batch)))
     event))
 
-(defn add-messages-to-timeout-pool [{:keys [task-type state]} event]
+(s/defn add-messages-to-timeout-pool :- Event
+  [{:keys [task-type state]} event :- Event]
   (when (= task-type :input)
     (swap! state update :timeout-pool rsc/add-to-head
            (map :id (:onyx.core/batch event))))
   event)
 
-(defn process-sentinel [{:keys [task-type monitoring pipeline]} event]
+(s/defn process-sentinel :- Event
+  [{:keys [task-type monitoring pipeline]} event :- Event]
   (if (and (= task-type :input)
            (sentinel-found? event))
     (do
@@ -192,8 +201,8 @@
                         batch))))
     event))
 
-(defn replay-windows-from-log
-  [{:keys [onyx.core/window-state onyx.core/state-log] :as event}]
+(s/defn replay-windows-from-log :- Event
+  [{:keys [onyx.core/window-state onyx.core/state-log] :as event} :- Event]
   (when (windowed-task? event)
     (swap! window-state 
            (fn [wstate] 
@@ -203,41 +212,45 @@
                replayed-state))))
   event)
 
-(defn window-state-updates [segment widstate w grouping-fn]
-  (let [window-id (:window/id w)
-        record (:aggregate/record w)
-        segment-coerced (we/uniform-units record segment)
-        widstate' (we/speculate-update record widstate segment-coerced)
+(s/defn window-state-updates 
+  [segment 
+   widstate 
+   {:keys [window super-agg-fn create-state-update apply-state-update] :as iw} :- InternalWindow 
+   grouping-fn]
+  (let [segment-coerced (we/uniform-units iw segment)
+        widstate' (we/speculate-update iw widstate segment-coerced)
         widstate'' (if grouping-fn 
-                     (merge-with #(we/merge-extents record % (:aggregate/super-agg-fn w) segment-coerced) widstate')
-                     (we/merge-extents record widstate' (:aggregate/super-agg-fn w) segment-coerced))
-        extents (we/extents record (keys widstate'') segment-coerced)
+                     (merge-with #(we/merge-extents iw % super-agg-fn segment-coerced) widstate')
+                     (we/merge-extents iw widstate' super-agg-fn segment-coerced))
+        extents (we/extents iw (keys widstate'') segment-coerced)
         grp-key (if grouping-fn (grouping-fn segment))]
-    (let [record (:aggregate/record w)]
-      (reduce (fn [[wst entries] extent]
-                (let [extent-state (get wst extent)
-                      state-value (->> (if grouping-fn (get extent-state grp-key) extent-state)
-                                       (agg/default-state-value w))
-                      state-transition-entry ((:aggregate/create-state-update w) w state-value segment)
-                      new-state-value ((:aggregate/apply-state-update w) w state-value state-transition-entry)
-                      new-state (if grouping-fn
-                                  (assoc extent-state grp-key new-state-value)
-                                  new-state-value)
-                      log-value (if grouping-fn 
-                                  (list extent state-transition-entry grp-key)
-                                  (list extent state-transition-entry))]
-                  (list (assoc wst extent new-state)
-                        (conj entries log-value))))
-              (list widstate'' [])
-              extents)))) 
+    (reduce (fn [[wst entries] extent]
+              (let [extent-state (get wst extent)
+                    state-value (->> (if grouping-fn (get extent-state grp-key) extent-state)
+                                     (agg/default-state-value iw))
+                    state-transition-entry (create-state-update window state-value segment)
+                    new-state-value (apply-state-update window state-value state-transition-entry)
+                    new-state (if grouping-fn
+                                (assoc extent-state grp-key new-state-value)
+                                new-state-value)
+                    log-value (if grouping-fn 
+                                (list extent state-transition-entry grp-key)
+                                (list extent state-transition-entry))]
+                (list (assoc wst extent new-state)
+                      (conj entries log-value))))
+            (list widstate'' [])
+            extents))) 
 
-(defn triggers-state-updates [event triggers notification state log-entries changelogs]
+(s/defn triggers-state-updates 
+  [event :- Event triggers :- [InternalTrigger] notification state log-entries changelogs]
   (reduce
-    (fn [[state entries cgs] {:keys [trigger/window-id trigger/id] :as t}]
-      (if (and (some #{(:context notification)} (triggers/trigger-notifications event t)) 
-               (triggers/trigger-fire? event t notification))
+    (s/fn [[state entries cgs] 
+           {:keys [window-id id trigger] :as t} :- InternalTrigger]
+      (if (and (some #{(:context notification)} (trigger-notifications event trigger)) 
+               (trigger-fire? event trigger notification))
         (let [t-changelog (changelogs id)
-              [new-window-id-state entry] (triggers/fire-trigger! event (get state window-id) t notification t-changelog)
+              window-id-state (get state window-id) 
+              [new-window-id-state entry] (fire-trigger! event window-id-state t notification t-changelog)
               window-state (assoc state window-id new-window-id-state)
               updated-changelog (dissoc cgs id)]
           (list window-state (conj entries entry) updated-changelog))
@@ -246,8 +259,9 @@
     triggers))
 
 ;; Fix to not require grouping-fn in window-state-updates
-(defn windows-state-updates [segment grouping-fn windows state-log-entries]
-  (reduce (fn [[state log-entries] {:keys [window/id] :as window}]
+(s/defn windows-state-updates 
+  [segment grouping-fn windows :- [InternalWindow] state-log-entries]
+  (reduce (fn [[state log-entries] {:keys [id] :as window}]
             (let [window-id-state (get state id)
                   [window-id-state' window-entries] (window-state-updates segment window-id-state window grouping-fn)
                   window-state (assoc state id window-id-state')]
@@ -265,10 +279,11 @@
                              (into (or changes []) 
                                    (window-id->changes window-id)))))
             changelog
-            (filter :trigger/changelog? triggers))))
+            (filter :changelog? triggers))))
 
-(defn assign-windows
-  [{:keys [peer-replica-view] :as compiled} {:keys [onyx.core/windows] :as event}]
+(s/defn assign-windows :- Event
+  [{:keys [peer-replica-view] :as compiled} 
+   {:keys [onyx.core/windows] :as event} :- Event]
   (when (seq windows)
     (let [{:keys [onyx.core/monitoring onyx.core/state onyx.core/messenger 
                   onyx.core/triggers onyx.core/windows onyx.core/task-map onyx.core/window-state 
@@ -307,7 +322,9 @@
           (:acks results)))))
   event)
 
-(defn write-batch [{:keys [pipeline]} event]
+(s/defn write-batch :- Event 
+  [{:keys [pipeline]} 
+   event :- Event]
   (let [rets (merge event (p-ext/write-batch pipeline event))]
     (taoensso.timbre/trace (format "[%s / %s] Wrote %s segments"
                                    (:onyx.core/id rets)
@@ -378,12 +395,14 @@
 (defn setup-triggers [event]
   (reduce triggers/trigger-setup
           event
-          (:onyx.core/triggers event)))
+          (map :trigger 
+               (:onyx.core/triggers event))))
 
 (defn teardown-triggers [event]
   (reduce triggers/trigger-teardown
           event
-          (:onyx.core/triggers event)))
+          (map :trigger 
+               (:onyx.core/triggers event))))
 
 (defn handle-exception [log e restart-ch outbox-ch job-id]
   (let [data (ex-data e)]
@@ -539,6 +558,7 @@
                                c/flow-conditions->event-map
                                c/lifecycles->event-map
                                (c/windows->event-map filtered-windows)
+                               (c/triggers->event-map triggers)
                                add-pipeline
                                c/task->event-map)
 
@@ -552,7 +572,6 @@
                               resolve-window-state
                               resolve-log
                               replay-windows-from-log
-                              (c/resolve-window-triggers triggers filtered-windows)
                               setup-triggers)]
 
         (>!! outbox-ch (entry/create-log-entry :signal-ready {:id id}))

@@ -9,7 +9,8 @@
           'keyword-namespaced?))
 
 (def Function
-  (s/pred fn? 'fn?))
+  (s/either (s/pred var? 'var?)
+            (s/pred fn? 'fn?)))
 
 (def TaskName
   (s/pred (fn [v]
@@ -258,13 +259,32 @@
    :window/aggregation (s/either s/Keyword [s/Keyword])
    (s/optional-key :window/init) s/Any
    (s/optional-key :window/window-key) s/Any
-   (s/optional-key :window/min-key) SPosInt
+   (s/optional-key :window/min-value) s/Int
    (s/optional-key :window/range) Unit
    (s/optional-key :window/slide) Unit
    (s/optional-key :window/timeout-gap) Unit
    (s/optional-key :window/session-key) s/Any
    (s/optional-key :window/doc) s/Str
    UnsupportedWindowKey s/Any})
+
+(def InternalWindow
+  {:id s/Keyword
+   :window Window
+   :task TaskName
+   :type WindowType
+   :aggregation (s/either s/Keyword [s/Keyword])
+   (s/optional-key :init) (s/maybe s/Any)
+   (s/optional-key :window-key) (s/maybe s/Any)
+   (s/optional-key :min-value) (s/maybe SPosInt)
+   (s/optional-key :range) (s/maybe Unit)
+   (s/optional-key :slide) (s/maybe Unit)
+   (s/optional-key :timeout-gap) (s/maybe Unit)
+   (s/optional-key :session-key) (s/maybe s/Any)
+   (s/optional-key :doc) (s/maybe s/Str)
+   :init-fn Function
+   :create-state-update Function
+   :super-agg-fn Function
+   :apply-state-update Function})
 
 (def TriggerRefinement
   NamespacedKeyword)
@@ -282,6 +302,14 @@
                 (not (= "trigger" (namespace k)))))
           'unsupported-trigger-key))
 
+(def TriggerPeriod
+  [(s/one PosInt "trigger period") 
+   (s/one TriggerPeriod "threshold type")])
+
+(def TriggerThreshold 
+  [(s/one PosInt "number elements") 
+   (s/one TriggerThreshold "threshold type")])
+
 (def Trigger
   {:trigger/window-id s/Keyword
    :trigger/refinement TriggerRefinement
@@ -293,11 +321,32 @@
    (s/optional-key :trigger/pred) s/Keyword
    (s/optional-key :trigger/watermark-percentage) double
    (s/optional-key :trigger/doc) s/Str
-   (s/optional-key :trigger/period) [(s/one PosInt "trigger period") 
-                                     (s/one TriggerPeriod "threshold type")]
-   (s/optional-key :trigger/threshold) [(s/one PosInt "number elements") 
-                                        (s/one TriggerThreshold "threshold type")]
+   (s/optional-key :trigger/period) TriggerPeriod
+   (s/optional-key :trigger/threshold) TriggerThreshold
+   (s/optional-key :trigger/id) s/Uuid
    UnsupportedTriggerKey s/Any})
+
+(def RefinementCall
+  {:refinement/create-state-update Function
+   :refinement/apply-state-update Function})
+
+(def InternalTrigger
+  {:window-id s/Keyword
+   :refinement TriggerRefinement
+   :on s/Keyword
+   :sync s/Keyword
+   :fire-all-extents? (s/maybe s/Bool)
+   :changelog? s/Bool
+   :pred (s/maybe s/Keyword)
+   :watermark-percentage (s/maybe double)
+   :doc (s/maybe s/Str)
+   :period (s/maybe TriggerPeriod)
+   :threshold (s/maybe TriggerThreshold) 
+   :sync-fn (s/maybe Function)
+   :id s/Any
+   :trigger Trigger
+   :internal-window InternalWindow
+   :refinement-calls RefinementCall})
 
 (def StateAggregationCall
   {(s/optional-key :aggregation/init) Function
@@ -305,15 +354,14 @@
    :aggregation/apply-state-update Function
    (s/optional-key :aggregation/super-aggregation-fn) Function})
 
-(def RefinementCall
-  {:refinement/create-state-update Function
-   :refinement/apply-state-update Function})
-
 (def JobScheduler
   NamespacedKeyword)
 
 (def TaskScheduler
   NamespacedKeyword)
+
+(def Event 
+  {s/Any s/Any})
 
 (def Job
   {:catalog Catalog

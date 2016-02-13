@@ -1,9 +1,10 @@
 (ns onyx.triggers.triggers-api
-  (:require [onyx.static.planning :refer [find-window]]
-            [onyx.windowing.units :refer [to-standard-units coerce-key]]
+  (:require [onyx.windowing.units :refer [to-standard-units coerce-key]]
             [onyx.windowing.window-id :as wid]
             [onyx.windowing.window-extensions :as we]
             [onyx.static.default-vals :as d]
+            [onyx.schema :refer [Event Trigger InternalTrigger]]
+            [schema.core :as s]
             [taoensso.timbre :refer [info warn fatal]]))
 
 (defmulti trigger-setup
@@ -41,21 +42,20 @@
   [event trigger]
   event)
 
-(defn fire-trigger! 
-  [{:keys [onyx.core/windows] :as event} 
+(s/defn fire-trigger! 
+  [{:keys [onyx.core/windows] :as event} :- Event
    window-id-state 
-   {:keys [trigger/window-id trigger/sync-fn 
-           refinement/create-state-update refinement/apply-state-update]
-    :as trigger}
+   {:keys [window-id sync-fn refinement-calls internal-window trigger]} :- InternalTrigger
    opts 
    changelog]
-  (let [window (find-window windows window-id)
-        extent->bounds #(we/bounds (:aggregate/record window) %)
+  (let [{:keys [refinement/apply-state-update 
+                refinement/create-state-update]} refinement-calls
+        extent->bounds #(we/bounds internal-window %)
         opts (merge opts {:window/extent->bounds extent->bounds
                           :aggregation/changelog changelog})
         entry (create-state-update trigger opts window-id-state)
         new-state (apply-state-update trigger opts window-id-state entry)
         opts (merge opts {:refinement/entry entry
                           :refinement/new-state new-state})]
-    (sync-fn event window trigger opts window-id-state)
+    (sync-fn event (:window internal-window) trigger opts window-id-state)
     (list new-state entry)))
