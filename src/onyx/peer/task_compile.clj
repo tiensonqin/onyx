@@ -14,15 +14,19 @@
             [onyx.windowing.window-compile :as wc]))
 
 (defn windows->event-map [windows event]
-  (assoc event :onyx.core/windows (wc/resolve-windows windows)))
+  (assoc event :onyx.core/windows (map wc/resolve-window windows)))
 
-(s/defn filter-triggers [triggers :- [Trigger] windows :- [InternalWindow]]
+(s/defn filter-triggers 
+  [windows :- [InternalWindow]
+   triggers :- [Trigger]]
   (filter #(some #{(:trigger/window-id %)}
                  (map :id windows))
           triggers))
 
 (defn triggers->event-map [triggers {:keys [onyx.core/windows] :as event}]
-  (assoc event :onyx.core/triggers (wc/resolve-triggers (filter-triggers triggers windows) windows)))
+  (assoc event :onyx.core/triggers (->> triggers
+                                        (filter-triggers windows)
+                                        (mapv (partial wc/resolve-trigger windows)))))
 
 (s/defn flow-conditions->event-map 
   [{:keys [onyx.core/flow-conditions onyx.core/workflow onyx.core/task] :as event} :- Event]

@@ -38,44 +38,40 @@
        (map (fn [[k v]] [(keyword (name k)) v]))
        (into {})))
 
-(s/defn resolve-windows :- [InternalWindow]
-  [windows :- [Window]]
-  (mapv (fn [window]
-          (let [agg (:window/aggregation window)
-                agg-var (if (sequential? agg) (first agg) agg)
-                calls (var-get (kw->fn agg-var))
-                _ (validation/validate-state-aggregation-calls calls)]
-            (-> window
-                (filter-ns-key-map "window")
-                (assoc :window window
-                       :init-fn (resolve-window-init window calls)
-                       :create-state-update (:aggregation/create-state-update calls)
-                       :super-agg-fn (:aggregation/super-aggregation-fn calls)
-                       :apply-state-update (:aggregation/apply-state-update calls))
-                ((w/windowing-builder window)))))
-          windows))
+(s/defn resolve-window :- InternalWindow
+  [window :- Window]
+  (let [agg (:window/aggregation window)
+        agg-var (if (sequential? agg) (first agg) agg)
+        calls (var-get (kw->fn agg-var))
+        _ (validation/validate-state-aggregation-calls calls)]
+    (-> window
+        (filter-ns-key-map "window")
+        (assoc :window window
+               :init-fn (resolve-window-init window calls)
+               :create-state-update (:aggregation/create-state-update calls)
+               :super-agg-fn (:aggregation/super-aggregation-fn calls)
+               :apply-state-update (:aggregation/apply-state-update calls))
+        ((w/windowing-builder window)))))
 
 (s/defn find-window :- InternalWindow 
   [windows :- [InternalWindow] window-id]
   (let [matches (filter #(= window-id (:id %)) windows)]
     (only matches)))
 
-(s/defn resolve-triggers :- [InternalTrigger]
-  [triggers :- [Trigger] windows :- [InternalWindow]]
-  (mapv
-    (fn [{:keys [trigger/sync trigger/refinement trigger/window-id] :as trigger}] 
-      (let [refinement-calls (var-get (kw->fn refinement))] 
-        (validation/validate-refinement-calls refinement-calls)
-        (let [trigger (assoc trigger :trigger/id (random-uuid))] 
-          (-> trigger
-              (filter-ns-key-map "trigger")
-              (update :changelog? (fn [ch] (if (nil? ch) true ch)))  
-              (assoc :internal-window (find-window windows (:trigger/window-id trigger)))
-              (assoc :trigger trigger)
-              (assoc :sync-fn (kw->fn sync))
-              (assoc :refinement-calls refinement-calls)    
-              map->InternalTrigger))))
-   triggers))
+(s/defn resolve-trigger :- InternalTrigger
+  [windows :- [InternalWindow]
+   {:keys [trigger/sync trigger/refinement trigger/window-id] :as trigger} :- Trigger]
+  (let [refinement-calls (var-get (kw->fn refinement))] 
+    (validation/validate-refinement-calls refinement-calls)
+    (let [trigger (assoc trigger :trigger/id (random-uuid))] 
+      (-> trigger
+          (filter-ns-key-map "trigger")
+          (update :changelog? (fn [ch] (if (nil? ch) true ch)))  
+          (assoc :internal-window (find-window windows (:trigger/window-id trigger)))
+          (assoc :trigger trigger)
+          (assoc :sync-fn (kw->fn sync))
+          (assoc :refinement-calls refinement-calls)    
+          map->InternalTrigger))))
 
 (defn compile-apply-window-entry-fn [{:keys [onyx.core/task-map onyx.core/windows] :as event}]
   (let [grouped-task? (g/grouped-task? task-map)
