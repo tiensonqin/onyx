@@ -20,7 +20,7 @@
                 (Thread/sleep ms)
                 (let [state (get (:state @window-state) window-id)
                       changelog (get (:changelog @window-state) id)
-                      [new-state entries] (api/fire-trigger! event state trigger {:context :timer} changelog)]
+                      [new-state entries] (api/fire-trigger! event state trigger {:context :timer})]
                   (swap! window-state assoc :state new-state)
                   (swap! window-state update :changelog dissoc id)
                   ;; TODO: impossible to do this correctly as designed - should disable refinements for triggered

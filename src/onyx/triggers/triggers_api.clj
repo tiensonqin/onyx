@@ -46,13 +46,11 @@
   [{:keys [onyx.core/windows] :as event} :- Event
    window-id-state 
    {:keys [window-id sync-fn refinement-calls internal-window trigger]} :- InternalTrigger
-   opts 
-   changelog]
+   opts]
   (let [{:keys [refinement/apply-state-update 
                 refinement/create-state-update]} refinement-calls
         extent->bounds #(we/bounds internal-window %)
-        opts (merge opts {:window/extent->bounds extent->bounds
-                          :aggregation/changelog changelog})
+        opts (merge opts {:window/extent->bounds extent->bounds})
         entry (create-state-update trigger opts window-id-state)
         new-state (apply-state-update trigger opts window-id-state entry)
         opts (merge opts {:refinement/entry entry

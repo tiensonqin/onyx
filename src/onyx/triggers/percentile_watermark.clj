@@ -20,7 +20,7 @@
     (>= (coerce-key watermark :milliseconds) (+ lower-extent-bound offset))))
 
 (defmethod api/trigger-fire? :percentile-watermark
-  [{:keys [onyx.core/window-state] :as event} trigger args]
+  [event trigger args]
   ;; If this was stimulated by a new segment, check if it should fire.
   ;; Otherwise if this was a completed task, always fire.
   (if (:segment args)
